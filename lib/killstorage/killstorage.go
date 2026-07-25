@@ -142,13 +142,13 @@ type Kill struct {
 	KillTime      uint64
 	Level         string
 	Mission       string
-	KillerID      uint64
+	KillerID      int64
 	KillerTeam    byte
 	KillerVehicle string
 	KillerPosX    float64
 	KillerPosZ    float64
 	Weapon        string
-	VictimID      uint64
+	VictimID      int64
 	VictimTeam    byte
 	VictimVehicle string
 	VictimPosX    float64
@@ -411,13 +411,16 @@ func LuxCarveToKills(carve *lux.LuxCarve) (ret []Kill, err error) {
 		if kill.OffenderUid == "0" {
 			continue
 		}
-		killerID, err := strconv.ParseUint(kill.OffenderUid, 10, 64)
+		killerID, err := strconv.ParseInt(kill.OffenderUid, 10, 64)
 		if err != nil {
 			return ret, fmt.Errorf("parsing offender uid string %q: %w", kill.OffenderUid, err)
 		}
-		victimID, err := strconv.ParseUint(kill.OffendedUid, 10, 64)
+		victimID, err := strconv.ParseInt(kill.OffendedUid, 10, 64)
 		if err != nil {
 			return ret, fmt.Errorf("parsing offended uid string %q: %w", kill.OffendedUid, err)
+		}
+		if killerID <= 0 || victimID <= 0 {
+			continue
 		}
 		if len(kill.OffendedPos) != 3 {
 			return ret, fmt.Errorf("offended pos is not 3 elements: %v", kill.OffendedPos)
