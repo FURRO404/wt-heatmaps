@@ -16,8 +16,13 @@ templ Page(content templ.Component) {
 		</head>
 		<body>
 			<nav class="header">
-				<span><a href="/"><b>War Thunder Heatmaps</b></a></span>
-				<span><a href="/stats">Stats</a></span>
+				<style>
+					.title{font-weight: bold;font-size: larger;margin-right: 1em;}
+					.headerLink{margin-right: 1em;}
+				</style>
+				<span class="title">War Thunder Heatmaps</span>
+				<span class="headerLink"><a href="/">View</a></span>
+				<span class="headerLink"><a href="/stats">Stats</a></span>
 				<span style="float: right;"><small>by flexcoral</small></span>
 			</nav>
 			@content
@@ -96,6 +101,7 @@ templ Index(levels []LevelStat, vehicles []string) {
 					<label for="killTimeMax">Kill time max (seconds):</label>
 					<input name="killTimeMax" type="number" value="" min="0" max="1800"/>
 				</p>
+				<p><small>Note: first spawns actually occur at around 40 second mark, offset filters accordingly!</small> </p>
 				<p style="white-space: nowrap">
 					<label for="killerVehicle">Killer vehicle:</label>
 					<select name="killerVehicle">
