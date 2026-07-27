@@ -78,3 +78,8 @@ a {
 	color: #ddd;
 	/*text-decoration: none;*/
 }
+
+a:visited {
+	color: #ddd;
+	/*text-decoration: none;*/
+}
