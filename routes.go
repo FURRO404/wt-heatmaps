@@ -30,6 +30,7 @@ func makeHTTPServeMux() http.HandlerFunc {
 	mux.HandleFunc("GET /", httpLog(handle404))
 	mux.HandleFunc("GET /static/", httpLog(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))).ServeHTTP))
 	mux.HandleFunc("GET /{$}", httpLog(compRender(serveIndex)))
+	mux.HandleFunc("GET /stats", httpLog(compRender(serveStats)))
 
 	mux.HandleFunc("GET /minimap/{size}/{k...}", serveCachedMinimaps)
 	mux.HandleFunc("GET /heat", httpLog(serveHeat))
@@ -68,18 +69,19 @@ var (
 		// log.Info().Str("id", id).Msg("colorguessing")
 		return imRGBA, nil
 	})
-	levelAmountsCache = caches.NewValueRefresh(6*time.Hour, func() map[string]int {
+	levelAmountsCache = caches.NewValueRefresh(6*time.Hour, func() []killstorage.AmountsByLevelRow {
 		ret, err := ks.GetAmountsByLevel(context.Background())
 		if err != nil {
 			log.Err(err).Msg("get amounts by level")
-			ret = map[string]int{}
+			ret = []killstorage.AmountsByLevelRow{}
 		}
 		return ret
 	})
+	levelStatsSorted = caches.NewValueRefresh(6*time.Hour, getSortedLevelStats)
 )
 
 func serveIndex(w http.ResponseWriter, r *http.Request) templ.Component {
-	levels := getSortedLevelStats()
+	levels := levelStatsSorted.Get()
 	vehicles := slices.Collect(maps.Values(ks.GetDictVehicles()))
 	slices.Sort(vehicles)
 	return frontend.Page(frontend.Index(levels, vehicles))
@@ -87,7 +89,10 @@ func serveIndex(w http.ResponseWriter, r *http.Request) templ.Component {
 
 func getSortedLevelStats() []frontend.LevelStat {
 	levelAmounts := levelAmountsCache.Get()
-	levelNames := slices.Collect(maps.Keys(levelAmounts))
+	levelNames := make([]string, len(levelAmounts))
+	for i, v := range levelAmounts {
+		levelNames[i] = v.LevelName
+	}
 	err := levelByColorSorter.Sort(levelNames)
 	if err != nil {
 		log.Err(err).Msg("sort")
@@ -95,8 +100,10 @@ func getSortedLevelStats() []frontend.LevelStat {
 	levels := make([]frontend.LevelStat, 0, len(levelAmounts))
 	for _, levelName := range levelNames {
 		levels = append(levels, frontend.LevelStat{
-			Level:   levelName,
-			Samples: levelAmounts[levelName],
+			Level: levelName,
+			Samples: levelAmounts[slices.IndexFunc(levelAmounts, func(val killstorage.AmountsByLevelRow) bool {
+				return val.LevelName == levelName
+			})].Count,
 		})
 	}
 	return levels

@@ -353,43 +353,59 @@ GROUP BY (ROUND(p.x))::int, (ROUND(p.z))::int;`
 	})
 }
 
-func (s *KillsStorage) GetAmountsByLevel(ctx context.Context) (map[string]int, error) {
-	rows, err := s.db.Query(ctx, `select level, count(*) from kills group by level order by 2 desc;`)
+type AmountsByLevelRow struct {
+	LevelName string
+	Count     int
+}
+
+func (s *KillsStorage) GetAmountsByLevel(ctx context.Context) ([]AmountsByLevelRow, error) {
+	rows, err := s.db.Query(ctx, `select name, count(*) from kills left join level_names on level_names.id = kills.level group by 1 order by 2 desc;`)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return map[string]int{}, nil
+			return []AmountsByLevelRow{}, nil
 		}
 	}
-	var s1, s2 int
-	ret := map[string]int{}
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	_, err = pgx.ForEachRow(rows, []any{&s1, &s2}, func() error {
-		levelString, ok := s.cLevels.GetValueNOLOCK(s1)
-		if ok {
-			ret[levelString] = s2
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (ret AmountsByLevelRow, err error) {
+		err = row.Scan(&ret.LevelName, &ret.Count)
+		return
+	})
+}
+
+func (s *KillsStorage) GetAmountsByDay(ctx context.Context) (map[time.Time]int, error) {
+	rows, err := s.db.Query(ctx, `with kills_tablenames as (
+	select inhrelid::regclass as tn
+	from pg_catalog.pg_inherits
+	where inhparent = 'public.kills'::regclass
+)
+select kt.tn, (case when c.reltuples < 0 then float8 '0'
+            when c.relpages = 0 then float8 '0'
+            else c.reltuples / c.relpages end
+    * (pg_catalog.pg_relation_size(c.oid) / pg_catalog.current_setting('block_size')::int))::bigint
+from kills_tablenames as kt
+left join pg_catalog.pg_class as c on c.oid = kt.tn
+`)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return map[time.Time]int{}, nil
 		}
+	}
+	var s1 string
+	var s2 int
+	ret := map[time.Time]int{}
+	_, err = pgx.ForEachRow(rows, []any{&s1, &s2}, func() error {
+		var sy, sm, sd int
+		n, err := fmt.Sscanf(s1, `kills_y%dm%dd%d`, &sy, &sm, &sd)
+		if err != nil {
+			return fmt.Errorf("failed to scan date from table name %q: %w", s1, err)
+		}
+		if n != 3 {
+			return fmt.Errorf("table name %q failed to scan 3 date elements, got only %d out of 3", s1, n)
+		}
+		ret[time.Date(sy, time.Month(sm), sd, 0, 0, 0, 0, time.UTC)] = s2
 		return nil
 	})
 	return ret, err
 }
-
-// func (s *KillsStorage) GetKillCounts(from time.Time, hours uint) ([]int, error) {
-// 	ret := make([]int, hours)
-// 	for i := range hours {
-// 		tableName := fmt.Sprintf("kills_y%dm%dd%dh%d", from.Year(), from.Month(), from.Day(), from.Hour())
-// 		err := s.db.QueryRow(context.Background(), `select (case when c.reltuples < 0 then float8 '0'
-//              when c.relpages = 0 then float8 '0'
-//              else c.reltuples / c.relpages end
-//      * (pg_catalog.pg_relation_size(c.oid) / pg_catalog.current_setting('block_size')::int))::bigint
-// from pg_catalog.pg_class c
-// where c.oid = 'public.`+tableName+`'::regclass;`).Scan(&ret[i])
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
-// 	return ret, nil
-// }
 
 func (s *KillsStorage) Close() {
 	s.db.Close()

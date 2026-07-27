@@ -59,3 +59,22 @@ input {
 	height: 90%;
 	overflow-y: scroll;
 }
+
+.statBarGreen {
+	display: inline-block;
+	background-color: green;
+	height: 1em;
+	vertical-align: middle;
+}
+
+.statBarGray {
+	display: inline-block;
+	background-color: #6664;
+	height: 1em;
+	vertical-align: middle;
+}
+
+a {
+	color: #ddd;
+	/*text-decoration: none;*/
+}

@@ -1,5 +1,8 @@
 package frontend
 
+import "fmt"
+import "math"
+
 templ Page(content templ.Component) {
 	<!DOCTYPE html>
 	<html lang="en">
@@ -13,8 +16,9 @@ templ Page(content templ.Component) {
 		</head>
 		<body>
 			<nav class="header">
-				<span><b>War Thunder Heatmaps</b></span>
-				<span><small>by flexcoral</small></span>
+				<span><a href="/"><b>War Thunder Heatmaps</b></a></span>
+				<span><a href="/stats">Stats</a></span>
+				<span style="float: right;"><small>by flexcoral</small></span>
 			</nav>
 			@content
 		</body>
@@ -22,7 +26,7 @@ templ Page(content templ.Component) {
 }
 
 type LevelStat struct {
-	Level string
+	Level   string
 	Samples int
 }
 
@@ -114,6 +118,59 @@ templ Index(levels []LevelStat, vehicles []string) {
 		</div>
 	</div>
 	<script type="module" src="/static/main.js"></script>
+}
+
+type StatsTable struct {
+	Caption      string
+	ColumnLabels []string
+	Rows         [][]templ.Component
+}
+
+templ Stats(stats []StatsTable) {
+	<style>
+		.stats {
+			display: flex;
+			justify-content: space-evenly;
+		}
+		.stat {
+			padding: 1em;
+		}
+	</style>
+	<div class="stats">
+		for _, t := range stats {
+			<div class="stat">
+				<table>
+					<caption style="caption-side: top">{ t.Caption }</caption>
+					<thead>
+						<tr>
+							for _, v := range t.ColumnLabels {
+								<th>{ v }</th>
+							}
+						</tr>
+					</thead>
+					<tbody>
+						for _, r := range t.Rows {
+							<tr>
+								for _, v := range r {
+									<td>
+										@v
+									</td>
+								}
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</div>
+}
+
+templ StatElementFixedPercentBar(percent float64) {
+	<span class="statBarGreen" style={ fmt.Sprintf("width: %dpx", int(math.Round(100*percent))) }></span><span class="statBarGray" style={ fmt.Sprintf("width: %dpx", int(math.Round(100*(1-percent)))) }></span>
+}
+
+templ TextNode(content string) {
+	{ content }
 }
 
 // templ MapUpdateError(err error) {
