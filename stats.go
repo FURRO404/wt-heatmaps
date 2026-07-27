@@ -48,7 +48,7 @@ func collectStatsTables() []frontend.StatsTable {
 	}
 	byDayRows := [][]templ.Component{}
 	for _, k := range slices.SortedFunc(maps.Keys(byDay), func(a, b time.Time) int {
-		return a.Compare(b)
+		return b.Compare(a)
 	}) {
 		byDayRows = append(byDayRows, []templ.Component{
 			frontend.TextNode(k.Format(time.DateOnly)),
