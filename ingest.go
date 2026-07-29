@@ -130,10 +130,11 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 			continue
 		}
 		name = strings.ToLower(name)
+		name = strings.TrimSuffix(name, " - tank battle")
 		if isWinter {
 			name += " (winter)"
 		}
-		ret.Maps = append(ret.Maps, strings.TrimSuffix(name, " - tank battle"))
+		ret.Maps = append(ret.Maps, name)
 		i++
 	}
 	return
