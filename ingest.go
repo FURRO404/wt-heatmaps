@@ -120,13 +120,19 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 		if v.LevelName == "levels/avg_nuclear_incident.bin" {
 			continue
 		}
-		k := "location/" + strings.TrimSuffix(strings.TrimPrefix(v.LevelName, "levels/"), ".bin")
-		name, ok := levelNames[k]
+		k := v.LevelName
+		k = strings.TrimPrefix(v.LevelName, "levels/")
+		k = strings.TrimSuffix(k, ".bin")
+		k, isWinter := strings.CutSuffix(k, "_snow")
+		name, ok := levelNames["location/"+k]
 		if !ok {
-			log.Warn().Str("k", k).Msg("unmatched locale name")
+			log.Warn().Str("level", v.LevelName).Str("k", k).Msg("unmatched locale name")
 			continue
 		}
 		name = strings.ToLower(name)
+		if isWinter {
+			name += " (winter)"
+		}
 		ret.Maps = append(ret.Maps, strings.TrimSuffix(name, " - tank battle"))
 		i++
 	}

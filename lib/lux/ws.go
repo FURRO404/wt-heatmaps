@@ -28,7 +28,7 @@ func (prefs FetchPreferences) String() string {
 		peekAbbrevStrArr("Maps", prefs.Maps),
 		peekAbbrevStrArr("UIDs", prefs.UIDs),
 		peekAbbrevStrArr("Groups", prefs.Groups),
-	}, " ")
+	}, ", ")
 }
 
 func peekAbbrevStrArr(l string, a []string) string {
@@ -38,7 +38,7 @@ func peekAbbrevStrArr(l string, a []string) string {
 	case 1:
 		return a[0]
 	default:
-		return a[0] + " +" + strconv.Itoa(len(a)-1) + l
+		return a[0] + " +" + strconv.Itoa(len(a)-1) + " " + l
 	}
 }
 
