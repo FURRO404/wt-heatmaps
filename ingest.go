@@ -104,10 +104,7 @@ func initLevelNames() {
 
 func getPreferences() (ret lux.FetchPreferences, err error) {
 	amounts, err := ks.GetAmountsByLevel(context.Background())
-	if err != nil {
-		log.Err(err).Msg("getting levels for preferences")
-		return
-	}
+	log.Err(err).Int("amounts", len(amounts)).Msg("getting levels for preferences")
 	ret = lux.FetchPreferences{
 		Maps:   []string{},
 		UIDs:   []string{},
