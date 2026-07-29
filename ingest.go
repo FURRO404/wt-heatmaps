@@ -32,11 +32,17 @@ func ingestRoutine(exitChan <-chan struct{}) {
 			prefs, err := getPreferences()
 			if err != nil {
 				preferencesChan <- prefs
+			} else {
+				log.Err(err).Msg("getting inital preferences")
 			}
 			select {
 			case <-updatePreferencesExitChan:
 				return
 			case <-time.After(time.Hour):
+				prefs, err := getPreferences()
+				if err != nil {
+					log.Err(err).Msg("getting hourly preferences")
+				}
 				select {
 				case preferencesChan <- prefs:
 					log.Info().Msg("ingest preferences updated")
