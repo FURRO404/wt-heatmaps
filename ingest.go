@@ -120,7 +120,7 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 		if v.LevelName == "levels/avg_nuclear_incident.bin" {
 			continue
 		}
-		k := "locations/" + strings.TrimSuffix(strings.TrimPrefix(v.LevelName, "levels/"), ".bin")
+		k := "location/" + strings.TrimSuffix(strings.TrimPrefix(v.LevelName, "levels/"), ".bin")
 		name, ok := levelNames[k]
 		if !ok {
 			log.Warn().Str("k", k).Msg("unmatched locale name")
