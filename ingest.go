@@ -30,11 +30,8 @@ func ingestRoutine(exitChan <-chan struct{}) {
 	wg.Go(func() {
 		for {
 			prefs, err := getPreferences()
-			if err == nil {
-				preferencesChan <- prefs
-			} else {
-				log.Err(err).Msg("getting inital preferences")
-			}
+			preferencesChan <- prefs
+			log.Err(err).Str("maps", prefs.String()).Msg("getting initial preferences")
 			select {
 			case <-updatePreferencesExitChan:
 				return
@@ -115,14 +112,20 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 		UIDs:   []string{},
 		Groups: []string{"tank"},
 	}
-	for _, v := range slices.Backward(amounts) {
+	for i, v := range slices.Backward(amounts) {
+		if i >= 10 {
+			break
+		}
 		if v.LevelName == "levels/avg_nuclear_incident.bin" {
 			continue
 		}
-		name, ok := levelNames["locations/"+strings.TrimSuffix(strings.TrimPrefix(v.LevelName, "levels/"), ".bin")]
+		k := "locations/" + strings.TrimSuffix(strings.TrimPrefix(v.LevelName, "levels/"), ".bin")
+		name, ok := levelNames[k]
 		if !ok {
+			log.Warn().Str("k", k).Msg("unmatched locale name")
 			continue
 		}
+		name = strings.ToLower(name)
 		ret.Maps = append(ret.Maps, strings.TrimSuffix(name, " - tank battle"))
 	}
 	return
