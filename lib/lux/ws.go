@@ -38,6 +38,11 @@ func FetchFromLux(log zerolog.Logger, exitChan <-chan struct{}, carvesChan chan<
 
 	wg.Go(func() {
 		defer log.Info().Msg("write pump exited")
+		codec := websocket.Codec{
+			Marshal: func(v any) (data []byte, payloadType byte, err error) {
+				data, err = json.Marshal(v)
+				return data, websocket.TextFrame, err
+			}}
 		for {
 			select {
 			case <-exitChan:
@@ -50,7 +55,7 @@ func FetchFromLux(log zerolog.Logger, exitChan <-chan struct{}, carvesChan chan<
 					wsClose()
 					return
 				}
-				errWrite = rawMessageCodec.Send(ws, v)
+				errWrite = codec.Send(ws, v)
 				if errWrite != nil {
 					wsClose()
 					return
@@ -63,28 +68,41 @@ func FetchFromLux(log zerolog.Logger, exitChan <-chan struct{}, carvesChan chan<
 		defer log.Info().Msg("read pump exited")
 		msgpack.StructAsArray = false
 		msgDecompressed := make([]byte, 0, 20_000_000)
+		var msg []byte
+		var msgType byte
+		codec := websocket.Codec{
+			Unmarshal: func(data []byte, payloadType byte, v any) error {
+				msgType = payloadType
+				*(v.(*[]byte)) = data
+				return nil
+			},
+		}
 		for {
-			var msg []byte
-			errRead = rawMessageCodec.Receive(ws, &msg)
+			errRead = codec.Receive(ws, &msg)
 			if errRead != nil {
 				wsClose()
 				return
 			}
-			msgDecompressed, errRead = zstd.Decompress(msgDecompressed, msg)
-			if errRead != nil {
-				wsClose()
-				return
-			}
-			var carve LuxCarve
-			errRead = msgpack.Unmarshal(msgDecompressed, &carve)
-			if errRead != nil {
-				wsClose()
-				return
-			}
-
-			select {
-			case carvesChan <- &carve:
-			default:
+			switch msgType {
+			case websocket.TextFrame:
+				log.Info().Str("data", string(msg)).Msg("text frame")
+			case websocket.BinaryFrame:
+				log.Info().Int("data", len(msg)).Msg("binary frame")
+				msgDecompressed, errRead = zstd.Decompress(msgDecompressed, msg)
+				if errRead != nil {
+					wsClose()
+					return
+				}
+				var carve LuxCarve
+				errRead = msgpack.Unmarshal(msgDecompressed, &carve)
+				if errRead != nil {
+					wsClose()
+					return
+				}
+				select {
+				case carvesChan <- &carve:
+				default:
+				}
 			}
 		}
 	})
@@ -118,15 +136,4 @@ func dialLux(log zerolog.Logger, token string) (*websocket.Conn, error) {
 	ws, err := websocket.NewClient(wsConfig, wsConn)
 	wsConn.SetDeadline(time.Time{})
 	return ws, err
-}
-
-var rawMessageCodec = websocket.Codec{
-	Marshal: func(v any) (data []byte, payloadType byte, err error) {
-		data, err = json.Marshal(v)
-		return data, websocket.TextFrame, err
-	},
-	Unmarshal: func(data []byte, payloadType byte, v any) error {
-		*(v.(*[]byte)) = data
-		return nil
-	},
 }
