@@ -60,6 +60,7 @@ func FetchFromLux(log zerolog.Logger, exitChan <-chan struct{}, carvesChan chan<
 					wsClose()
 					return
 				}
+				log.Info().Msg("sent preferences")
 			}
 		}
 	})
