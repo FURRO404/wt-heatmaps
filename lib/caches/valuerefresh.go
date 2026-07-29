@@ -30,3 +30,25 @@ func (r *ValueRefresh[T]) Get() T {
 	r.lastRefresh = time.Now()
 	return r.value
 }
+
+type ValueCacheCommon interface {
+	Ready() bool
+	Refresh()
+}
+
+func (r *ValueRefresh[T]) Ready() bool {
+	r.lock.Lock()
+	ret := time.Since(r.lastRefresh)+1*time.Second < r.refreshInterval
+	r.lock.Unlock()
+	return ret
+}
+
+func (r *ValueRefresh[T]) Refresh() {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if time.Since(r.lastRefresh) < r.refreshInterval {
+		return
+	}
+	r.value = r.getValueFn()
+	r.lastRefresh = time.Now()
+}
