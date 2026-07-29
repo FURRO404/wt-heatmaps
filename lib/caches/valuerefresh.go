@@ -34,6 +34,14 @@ func (r *ValueRefresh[T]) Get() T {
 type ValueCacheCommon interface {
 	Ready() bool
 	Refresh()
+	LastRefresh() time.Time
+}
+
+func (r *ValueRefresh[T]) LastRefresh() time.Time {
+	r.lock.Lock()
+	ret := r.lastRefresh
+	r.lock.Unlock()
+	return ret
 }
 
 func (r *ValueRefresh[T]) Ready() bool {

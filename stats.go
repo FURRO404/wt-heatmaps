@@ -65,9 +65,11 @@ func collectStatsTables() []frontend.StatsTable {
 }
 
 var (
-	statsCache = caches.NewValueRefresh(6*time.Hour, collectStatsTables)
+	statsCache = caches.NewValueRefresh(10*time.Minute, collectStatsTables)
 )
 
 func serveStats(_ http.ResponseWriter, _ *http.Request) templ.Component {
-	return frontend.Page(frontend.Stats(statsCache.Get()))
+	tables := statsCache.Get()
+	updatedAt := statsCache.LastRefresh()
+	return frontend.Page(frontend.Stats(tables, updatedAt))
 }
