@@ -109,7 +109,7 @@ func FetchFromLux(log zerolog.Logger, exitChan <-chan struct{}, carvesChan chan<
 			case websocket.TextFrame:
 				log.Info().Str("data", string(msg)).Msg("text frame")
 			case websocket.BinaryFrame:
-				log.Info().Int("data", len(msg)).Msg("binary frame")
+				// log.Info().Int("data", len(msg)).Msg("binary frame")
 				msgDecompressed, errRead = zstd.Decompress(msgDecompressed, msg)
 				if errRead != nil {
 					wsClose()

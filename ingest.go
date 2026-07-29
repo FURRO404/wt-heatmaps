@@ -48,6 +48,9 @@ func ingestRoutine(exitChan <-chan struct{}) {
 		}
 	})
 	wg.Go(func() {
+		lastAnnounceTime := time.Now()
+		lastAnnounceCountSession := 0
+		lastAnnounceCountKills := 0
 		for carve := range carvesChan {
 			kills, err := killstorage.LuxCarveToKills(carve)
 			if err != nil {
@@ -59,6 +62,14 @@ func ingestRoutine(exitChan <-chan struct{}) {
 			err = ks.StoreKills(kills)
 			if err != nil {
 				log.Err(err).Int("n", len(kills)).Msg("storing kills")
+			}
+			lastAnnounceCountSession++
+			lastAnnounceCountKills += len(kills)
+			sinceLastAnnounce := time.Since(lastAnnounceTime)
+			if sinceLastAnnounce > time.Hour {
+				log.Info().Int("sessions", lastAnnounceCountSession).Int("kills", lastAnnounceCountKills).Str("in", sinceLastAnnounce.Round(time.Second).String()).Msg("ingest stat")
+				lastAnnounceTime = time.Now()
+				lastAnnounceCountSession = 0
 			}
 		}
 		log.Info().Msg("carve loop exited")
