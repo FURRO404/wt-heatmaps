@@ -30,7 +30,7 @@ func ingestRoutine(exitChan <-chan struct{}) {
 	wg.Go(func() {
 		for {
 			prefs, err := getPreferences()
-			if err != nil {
+			if err == nil {
 				preferencesChan <- prefs
 			} else {
 				log.Err(err).Msg("getting inital preferences")
