@@ -38,11 +38,9 @@ func ingestRoutine(exitChan <-chan struct{}) {
 			select {
 			case <-updatePreferencesExitChan:
 				return
-			case <-time.After(time.Hour):
+			case <-time.After(20 * time.Minute):
 				prefs, err := getPreferences()
-				if err != nil {
-					log.Err(err).Msg("getting hourly preferences")
-				}
+				log.Err(err).Str("maps", prefs.String()).Msg("getting hourly preferences")
 				select {
 				case preferencesChan <- prefs:
 					log.Info().Msg("ingest preferences updated")
@@ -121,7 +119,7 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 		if v.LevelName == "levels/avg_nuclear_incident.bin" {
 			continue
 		}
-		name, ok := levelNames["locations/"+strings.TrimPrefix(v.LevelName, "levels/")]
+		name, ok := levelNames["locations/"+strings.TrimSuffix(strings.TrimPrefix(v.LevelName, "levels/"), ".bin")]
 		if !ok {
 			continue
 		}
