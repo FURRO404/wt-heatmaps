@@ -71,5 +71,5 @@ var (
 func serveStats(_ http.ResponseWriter, _ *http.Request) templ.Component {
 	tables := statsCache.Get()
 	updatedAt := statsCache.LastRefresh()
-	return frontend.Page(frontend.Stats(tables, updatedAt))
+	return frontend.Page(frontend.Stats(tables, updatedAt, int(ingestStatSessionRate5m.Load()), int(ingestStatKillsRate5m.Load())))
 }

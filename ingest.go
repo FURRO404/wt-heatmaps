@@ -5,13 +5,20 @@ import (
 	"encoding/json"
 	"main/lib/killstorage"
 	"main/lib/lux"
+	"main/lib/ratetrack"
 	"os"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
+)
+
+var (
+	ingestStatSessionRate5m = &atomic.Int64{}
+	ingestStatKillsRate5m   = &atomic.Int64{}
 )
 
 func ingestRoutine(exitChan <-chan struct{}) {
@@ -48,9 +55,7 @@ func ingestRoutine(exitChan <-chan struct{}) {
 		}
 	})
 	wg.Go(func() {
-		lastAnnounceTime := time.Now()
-		lastAnnounceCountSession := 0
-		lastAnnounceCountKills := 0
+		rate := ratetrack.NewRateTracker(5*time.Minute, ingestStatSessionRate5m, ingestStatKillsRate5m)
 		for carve := range carvesChan {
 			kills, err := killstorage.LuxCarveToKills(carve)
 			if err != nil {
@@ -63,14 +68,7 @@ func ingestRoutine(exitChan <-chan struct{}) {
 			if err != nil {
 				log.Err(err).Int("n", len(kills)).Msg("storing kills")
 			}
-			lastAnnounceCountSession++
-			lastAnnounceCountKills += len(kills)
-			sinceLastAnnounce := time.Since(lastAnnounceTime)
-			if sinceLastAnnounce > time.Hour {
-				log.Info().Int("sessions", lastAnnounceCountSession).Int("kills", lastAnnounceCountKills).Str("in", sinceLastAnnounce.Round(time.Second).String()).Msg("ingest stat")
-				lastAnnounceTime = time.Now()
-				lastAnnounceCountSession = 0
-			}
+			rate.Measure(len(kills))
 		}
 		log.Info().Msg("carve loop exited")
 	})
@@ -149,4 +147,7 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 		i++
 	}
 	return
+}
+
+func measureRate(ch <-chan struct{}, rate *atomic.Uint64) {
 }
