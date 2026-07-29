@@ -6,6 +6,8 @@ import (
 	"main/lib/killstorage"
 	"main/lib/lux"
 	"os"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,11 +19,28 @@ func ingestRoutine(exitChan <-chan struct{}) {
 	if !haveLuxToken {
 		return
 	}
-	carvesChan := make(chan *lux.LuxCarve, 16)
-
-	ctx, cancel := context.WithCancel(context.Background())
 
 	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	carvesChan := make(chan *lux.LuxCarve, 16)
+	preferencesChan := make(chan lux.FetchPreferences, 16)
+	reconnectExitChan := make(chan struct{})
+	updatePreferencesExitChan := make(chan struct{})
+
+	wg.Go(func() {
+		for {
+			prefs, err := getPreferences()
+			if err != nil {
+				preferencesChan <- prefs
+			}
+			select {
+			case <-updatePreferencesExitChan:
+				return
+			case <-time.After(time.Hour):
+
+			}
+		}
+	})
 	wg.Go(func() {
 		for carve := range carvesChan {
 			kills, err := killstorage.LuxCarveToKills(carve)
@@ -43,11 +62,11 @@ func ingestRoutine(exitChan <-chan struct{}) {
 		defer close(carvesChan)
 		for {
 			select {
-			case <-ctx.Done():
+			case <-reconnectExitChan:
 				return
 			case <-time.After(5 * time.Second):
 			}
-			err := lux.FetchFromLux(log.Logger, ctx.Done(), carvesChan, luxToken)
+			err := lux.FetchFromLux(log.Logger, ctx.Done(), carvesChan, preferencesChan, luxToken)
 			log.Err(err).Msg("lux fetch exited")
 		}
 	})
@@ -55,7 +74,46 @@ func ingestRoutine(exitChan <-chan struct{}) {
 	<-exitChan
 
 	cancel()
+	close(reconnectExitChan)
 
 	wg.Wait()
 
+}
+
+var (
+	levelNames = map[string]string{}
+)
+
+func initLevelNames() {
+	lnBytes, err := os.ReadFile("levelnames.json")
+	if err != nil {
+		log.Err(err).Msg("reading levelnames.json")
+	}
+	err = json.Unmarshal(lnBytes, &levelNames)
+	if err != nil {
+		log.Err(err).Msg("parsing levelnames.json")
+	}
+}
+
+func getPreferences() (ret lux.FetchPreferences, err error) {
+	amounts, err := ks.GetAmountsByLevel(context.Background())
+	if err != nil {
+		return
+	}
+	ret = lux.FetchPreferences{
+		Maps:   []string{},
+		UIDs:   []string{},
+		Groups: []string{"tank"},
+	}
+	for _, v := range slices.Backward(amounts) {
+		if v.LevelName == "levels/avg_nuclear_incident.bin" {
+			continue
+		}
+		name, ok := levelNames["locations/"+strings.TrimPrefix(v.LevelName, "levels/")]
+		if !ok {
+			continue
+		}
+		ret.Maps = append(ret.Maps, strings.TrimSuffix(name, " - tank battle"))
+	}
+	return
 }

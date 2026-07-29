@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -14,12 +15,91 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-var ErrChannelNotAccepting = errors.New("channel not accepting")
+type FetchPreferences struct {
+	Maps   []string `json:"maps"`
+	UIDs   []string `json:"uids"`
+	Groups []string `json:"groups"`
+}
 
-func FetchFromLux(log zerolog.Logger, exitChan <-chan struct{}, carvesChan chan<- *LuxCarve, token string) error {
+func FetchFromLux(log zerolog.Logger, exitChan <-chan struct{}, carvesChan chan<- *LuxCarve, preferences <-chan FetchPreferences, token string) error {
+	ws, err := dialLux(log, token)
+	if err != nil {
+		return fmt.Errorf("dial lux: %w", err)
+	}
+	shouldCloseWriter := make(chan struct{})
+	wsClose := sync.OnceFunc(func() {
+		ws.Close()
+		close(shouldCloseWriter)
+	})
+	defer wsClose()
+
+	var wg sync.WaitGroup
+	var errWrite, errRead error
+
+	wg.Go(func() {
+		defer log.Info().Msg("write pump exited")
+		for {
+			select {
+			case <-exitChan:
+				wsClose()
+				return
+			case <-shouldCloseWriter:
+				return
+			case v, ok := <-preferences:
+				if !ok {
+					wsClose()
+					return
+				}
+				errWrite = rawMessageCodec.Send(ws, v)
+				if errWrite != nil {
+					wsClose()
+					return
+				}
+			}
+		}
+	})
+
+	wg.Go(func() {
+		defer log.Info().Msg("read pump exited")
+		msgpack.StructAsArray = false
+		msgDecompressed := make([]byte, 0, 20_000_000)
+		for {
+			var msg []byte
+			errRead = rawMessageCodec.Receive(ws, &msg)
+			if errRead != nil {
+				wsClose()
+				return
+			}
+			msgDecompressed, errRead = zstd.Decompress(msgDecompressed, msg)
+			if errRead != nil {
+				wsClose()
+				return
+			}
+			var carve LuxCarve
+			errRead = msgpack.Unmarshal(msgDecompressed, &carve)
+			if errRead != nil {
+				wsClose()
+				return
+			}
+
+			select {
+			case carvesChan <- &carve:
+			default:
+			}
+		}
+	})
+
+	log.Info().Msg("lux ws open")
+
+	wg.Wait()
+
+	return errors.Join(errWrite, errRead)
+}
+
+func dialLux(log zerolog.Logger, token string) (*websocket.Conn, error) {
 	wsConfig, err := websocket.NewConfig("wss://wtapi.dev/v1/replays/ws/random", "https://wtapi.dev/")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	wsConfig.Header.Add("Authorization", token)
 	wsConfig.TlsConfig = &tls.Config{
@@ -31,62 +111,13 @@ func FetchFromLux(log zerolog.Logger, exitChan <-chan struct{}, carvesChan chan<
 	log.Info().Msg("dialing lux")
 	wsConn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", "wtapi.dev:443", wsConfig.TlsConfig.Clone())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	log.Info().Msg("lux connected")
 	wsConn.SetDeadline(time.Now().Add(5 * time.Second))
 	ws, err := websocket.NewClient(wsConfig, wsConn)
-	if err != nil {
-		return err
-	}
-	wsClose := sync.OnceFunc(func() {
-		ws.Close()
-	})
-	defer wsClose()
 	wsConn.SetDeadline(time.Time{})
-
-	shouldClose := make(chan struct{})
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		select {
-		case <-exitChan:
-			wsClose()
-		case <-shouldClose:
-		}
-	})
-	defer wg.Wait()
-	defer close(shouldClose)
-
-	log.Info().Msg("lux ws open")
-
-	i := 0
-	msgpack.StructAsArray = false
-	msgDecompressed := make([]byte, 0, 20_000_000)
-	for {
-		var msg []byte
-		err = rawMessageCodec.Receive(ws, &msg)
-		if err != nil {
-			return err
-		}
-		msgDecompressed, err = zstd.Decompress(msgDecompressed, msg)
-		if err != nil {
-			return err
-		}
-		var carve LuxCarve
-		err = msgpack.Unmarshal(msgDecompressed, &carve)
-		if err != nil {
-			return err
-		}
-
-		select {
-		case <-exitChan:
-			return nil
-		case carvesChan <- &carve:
-		default:
-			return ErrChannelNotAccepting
-		}
-		i++
-	}
+	return ws, err
 }
 
 var rawMessageCodec = websocket.Codec{

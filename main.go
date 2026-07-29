@@ -47,6 +47,8 @@ func main() {
 		log.Fatal().Err(err).Msg("")
 	}
 
+	initLevelNames()
+
 	ctx, ctxCancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer ctxCancel()
 
