@@ -104,7 +104,10 @@ func initLevelNames() {
 
 func getPreferences() (ret lux.FetchPreferences, err error) {
 	amounts, err := ks.GetAmountsByLevel(context.Background())
-	log.Err(err).Int("amounts", len(amounts)).Msg("getting levels for preferences")
+	if err != nil {
+		return
+	}
+	retMaps := []string{}
 	ret = lux.FetchPreferences{
 		Maps:   []string{},
 		UIDs:   []string{},
@@ -124,7 +127,8 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 			continue
 		}
 		name = strings.ToLower(name)
-		ret.Maps = append(ret.Maps, strings.TrimSuffix(name, " - tank battle"))
+		retMaps = append(retMaps, strings.TrimSuffix(name, " - tank battle"))
 	}
+	ret.Maps = retMaps
 	return
 }
