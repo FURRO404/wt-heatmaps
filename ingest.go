@@ -35,10 +35,10 @@ func ingestRoutine(exitChan <-chan struct{}) {
 	updatePreferencesExitChan := make(chan struct{})
 
 	wg.Go(func() {
+		prefs, err := getPreferences()
+		preferencesChan <- prefs
+		log.Err(err).Str("maps", prefs.String()).Msg("getting initial preferences")
 		for {
-			prefs, err := getPreferences()
-			preferencesChan <- prefs
-			log.Err(err).Str("maps", prefs.String()).Msg("getting initial preferences")
 			select {
 			case <-updatePreferencesExitChan:
 				return
