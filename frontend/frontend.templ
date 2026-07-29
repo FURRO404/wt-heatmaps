@@ -40,8 +40,9 @@ templ Waitroom() {
 }
 
 type LevelStat struct {
-	Level   string
-	Samples int
+	Level        string
+	LevelDisplay string
+	Samples      int
 }
 
 templ Index(levels []LevelStat, vehicles []string) {
@@ -77,7 +78,7 @@ templ Index(levels []LevelStat, vehicles []string) {
 									<tr>
 										<td>
 											<center>
-												<button type="button" onclick="document.getElementById('settingsFormLevelInput').value = this.dataset.levelSelectValue;" data-level-select-value={ v.Level } popovertargetaction="hide" popovertarget="levelSelector">{ v.Level }</button>
+												<button type="button" onclick="document.getElementById('settingsFormLevelInput').value = this.dataset.levelSelectValue;" data-level-select-value={ v.Level } popovertargetaction="hide" popovertarget="levelSelector">{ v.LevelDisplay }</button>
 												<div>
 													Samples: { v.Samples }
 												</div>
@@ -154,7 +155,7 @@ templ Stats(stats []StatsTable, updatedAt time.Time, ingestStatSessionRate5m, in
 	<div style="text-align: center;">
 		Updated at: { updatedAt.Format(time.DateTime) }
 		({ time.Since(updatedAt).Round(time.Minute).String() } ago)
-		Ingest rate: {ingestStatSessionRate5m} sessions {ingestStatKillsRate5m} kills per 5 minutes
+		Ingest rate: { ingestStatSessionRate5m } sessions { ingestStatKillsRate5m } kills per 5 minutes
 	</div>
 	<div class="stats">
 		for _, t := range stats {

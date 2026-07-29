@@ -27,7 +27,7 @@ func collectStatsTables() []frontend.StatsTable {
 	byLevelRows := [][]templ.Component{}
 	for _, k := range byLevel {
 		byLevelRows = append(byLevelRows, []templ.Component{
-			frontend.TextNode(k.LevelName),
+			frontend.TextNode(levelToLocalized(k.LevelName)),
 			frontend.TextNode(strconv.Itoa(k.Count)),
 			frontend.StatElementFixedPercentBar(float64(k.Count) / float64(byLevelMax)),
 		})

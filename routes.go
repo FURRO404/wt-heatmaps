@@ -135,7 +135,8 @@ func getSortedLevelStats() []frontend.LevelStat {
 	levels := make([]frontend.LevelStat, 0, len(levelAmounts))
 	for _, levelName := range levelNames {
 		levels = append(levels, frontend.LevelStat{
-			Level: levelName,
+			Level:        levelName,
+			LevelDisplay: levelToLocalized(levelName),
 			Samples: levelAmounts[slices.IndexFunc(levelAmounts, func(val killstorage.AmountsByLevelRow) bool {
 				return val.LevelName == levelName
 			})].Count,

@@ -129,25 +129,25 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 		if v.LevelName == "levels/avg_nuclear_incident.bin" {
 			continue
 		}
-		k := v.LevelName
-		k = strings.TrimPrefix(v.LevelName, "levels/")
-		k = strings.TrimSuffix(k, ".bin")
-		k, isWinter := strings.CutSuffix(k, "_snow")
-		name, ok := levelNames["location/"+k]
-		if !ok {
-			log.Warn().Str("level", v.LevelName).Str("k", k).Msg("unmatched locale name")
-			continue
-		}
-		name = strings.ToLower(name)
-		name = strings.TrimSuffix(name, " - tank battle")
-		if isWinter {
-			name += " (winter)"
-		}
-		ret.Maps = append(ret.Maps, name)
+		ret.Maps = append(ret.Maps, levelToLocalized(v.LevelName))
 		i++
 	}
 	return
 }
 
-func measureRate(ch <-chan struct{}, rate *atomic.Uint64) {
+func levelToLocalized(n string) string {
+	k := strings.TrimPrefix(n, "levels/")
+	k = strings.TrimSuffix(k, ".bin")
+	k, isWinter := strings.CutSuffix(k, "_snow")
+	name, ok := levelNames["location/"+k]
+	if !ok {
+		log.Warn().Str("level", n).Str("k", k).Msg("unmatched locale name")
+		return n
+	}
+	name = strings.ToLower(name)
+	name = strings.TrimSuffix(name, " - tank battle")
+	if isWinter {
+		name += " (winter)"
+	}
+	return name
 }
