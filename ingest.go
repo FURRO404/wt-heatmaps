@@ -107,13 +107,13 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 	if err != nil {
 		return
 	}
-	retMaps := []string{}
 	ret = lux.FetchPreferences{
 		Maps:   []string{},
 		UIDs:   []string{},
 		Groups: []string{"tank"},
 	}
-	for i, v := range slices.Backward(amounts) {
+	i := 0
+	for _, v := range slices.Backward(amounts) {
 		if i >= 10 {
 			break
 		}
@@ -127,8 +127,8 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 			continue
 		}
 		name = strings.ToLower(name)
-		retMaps = append(retMaps, strings.TrimSuffix(name, " - tank battle"))
+		ret.Maps = append(ret.Maps, strings.TrimSuffix(name, " - tank battle"))
+		i++
 	}
-	ret.Maps = retMaps
 	return
 }
