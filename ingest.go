@@ -144,7 +144,6 @@ func levelToLocalized(n string) string {
 		log.Warn().Str("level", n).Str("k", k).Msg("unmatched locale name")
 		return n
 	}
-	name = strings.ToLower(name)
 	name = strings.TrimSuffix(name, " - tank battle")
 	if isWinter {
 		name += " (winter)"
