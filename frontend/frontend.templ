@@ -30,6 +30,14 @@ templ Page(content templ.Component) {
 	</html>
 }
 
+templ Waitroom() {
+	<div>
+		<h2>Please wait</h2>
+		<p>Getting data ready for you...</p>
+		<p><small><i>This page will refresh periodically</i></small></p>
+	</div>
+}
+
 type LevelStat struct {
 	Level   string
 	Samples int

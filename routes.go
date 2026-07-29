@@ -31,13 +31,10 @@ func makeHTTPServeMux() http.HandlerFunc {
 	mux.HandleFunc("GET /static/", httpLog(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))).ServeHTTP))
 	mux.HandleFunc("GET /{$}", httpLog(compRender(serveIndex)))
 	mux.HandleFunc("GET /stats", httpLog(compRender(serveStats)))
+	// mux.HandleFunc("GET /waitroom/{p...}", httpLog(compRender(seveWaitroom)))
 
 	mux.HandleFunc("GET /minimap/{size}/{k...}", serveCachedMinimaps)
 	mux.HandleFunc("GET /heat", httpLog(serveHeat))
-	// mux.HandleFunc("GET /frontend/mapUpdate", httpLog(compRender(serveFrontendMapUpdate)))
-	// mux.HandleFunc("GET /ws/frontend", httpLog(websocket.Server{
-	// 	Handler: handleWsFrontend,
-	// }.ServeHTTP))
 
 	mux.HandleFunc("GET /missions...", httpLog(servePermaRedirect("/")))
 	mux.HandleFunc("GET /clans...", httpLog(servePermaRedirect("/")))
@@ -46,6 +43,44 @@ func makeHTTPServeMux() http.HandlerFunc {
 
 	return mux.ServeHTTP
 }
+
+// func ensureCached(work http.HandlerFunc, checks ...caches.ValueCacheCommon) http.HandlerFunc {
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		t := time.Now()
+// 		for {
+// 			ready := true
+// 			for _, c := range checks {
+// 				if !c.Ready() {
+// 					ready = false
+// 					break
+// 				}
+// 			}
+// 			if ready {
+// 				work(w, r)
+// 				return
+// 			}
+// 			time.Sleep(1 * time.Millisecond)
+// 			if time.Since(t) > 500*time.Millisecond {
+// 				w.Header().Add("Location", "/waitroom/"+url.PathEscape(r.URL.Path))
+// 				w.WriteHeader(http.StatusFound)
+// 				return
+// 			}
+// 		}
+// 	}
+// }
+
+// func seveWaitroom(w http.ResponseWriter, r *http.Request) templ.Component {
+// 	p := r.PathValue("p")
+// 	if p == "" || p[0] != '/' {
+// 		w.Header().Add("Location", "/")
+// 		w.WriteHeader(http.StatusFound)
+// 		return nil
+// 	}
+// 	w.Header().Add("Location", p)
+// 	w.Header().Add("Retry-After", "5")
+// 	w.WriteHeader(http.StatusFound)
+// 	return frontend.Page(frontend.Waitroom())
+// }
 
 var (
 	levelByColorSorter = imagecolorsort.NewImageColorSort(func(id string) (*image.RGBA, error) {
@@ -108,25 +143,6 @@ func getSortedLevelStats() []frontend.LevelStat {
 	}
 	return levels
 }
-
-// func serveFrontendMapUpdate(w http.ResponseWriter, r *http.Request) templ.Component {
-// 	// perf := time.Now()
-// 	q := r.URL.Query()
-// 	level := q.Get("level")
-// 	if !slices.Contains(slices.Collect(maps.Values(ks.GetDictLevels())), level) {
-// 		return nil
-// 	}
-// 	// levelOffsets, err := levelcoords.GetLevelCoordsCached(cfg.GetDString("cache/offsets.json", "cacheOffsets"), level)
-// 	// if err != nil {
-// 	// 	return frontend.MapUpdateError(err)
-// 	// }
-// 	return frontend.MapUpdate(frontend.MapUpdateParams{
-// 		Level:      level,
-// 		HeatParams: q,
-// 		// Offsets: levelOffsets,
-// 		// Msg:     fmt.Sprintf("Took: %s", time.Since(perf).String()),
-// 	})
-// }
 
 func serveHeat(w http.ResponseWriter, r *http.Request) {
 	perf := time.Now()
@@ -250,74 +266,3 @@ func servePermaRedirect(location string) func(w http.ResponseWriter, r *http.Req
 		w.WriteHeader(http.StatusMovedPermanently)
 	}
 }
-
-// func handleWsFrontend(ws *websocket.Conn) {
-// 	type FrontendForm struct {
-// 		Level string
-// 	}
-// 	for {
-// 		var ff FrontendForm
-// 		err := htmxCodec.Receive(ws, &ff)
-// 		if err != nil {
-// 			return
-// 		}
-// 		spew.Dump(ff)
-// 		err = wsSendText(ws, `<template><svg><image hx-swap-oob="true" id="tankmap" href="/minimap/`+ff.Level+`"></image></svg></template>`)
-// 		// err = wsSendComp(ws, "div", "tankmap", frontend.SVGTankmapImage("/minimap/"+level))
-// 		if err != nil {
-// 			log.Err(err).Msg("sending")
-// 		}
-// 	}
-// }
-
-// func wsSendText(ws *websocket.Conn, content string) error {
-// 	fw, err := ws.NewFrameWriter(websocket.TextFrame)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	fw.Write([]byte(content))
-// 	return fw.Close()
-// }
-
-// func wsSendElem(ws *websocket.Conn, elem, id, content string) error {
-// 	fw, err := ws.NewFrameWriter(websocket.TextFrame)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	fmt.Fprintf(fw, `<%s id="%s">%s</%s>`, elem, id, content, elem)
-// 	return fw.Close()
-// }
-
-// func wsSendComp(ws *websocket.Conn, elem, id string, content templ.Component) error {
-// 	fw, err := ws.NewFrameWriter(websocket.TextFrame)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	body := &strings.Builder{}
-// 	fmt.Fprintf(body, `<%s id="%s">`, elem, id)
-// 	err = content.Render(context.Background(), body)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	fmt.Fprintf(body, `</%s>`, elem)
-// 	_, err = fw.Write([]byte(body.String()))
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return fw.Close()
-// }
-
-// var htmxCodec = websocket.Codec{
-// 	Marshal: func(v any) (data []byte, payloadType byte, err error) {
-// 		switch d := v.(type) {
-// 		case string:
-// 			data = []byte(d)
-// 		case []byte:
-// 			data = d
-// 		}
-// 		return data, websocket.TextFrame, err
-// 	},
-// 	Unmarshal: func(data []byte, payloadType byte, v any) error {
-// 		return json.Unmarshal(data, &v)
-// 	},
-// }
