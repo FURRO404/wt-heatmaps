@@ -37,7 +37,12 @@ func ingestRoutine(exitChan <-chan struct{}) {
 			case <-updatePreferencesExitChan:
 				return
 			case <-time.After(time.Hour):
-
+				select {
+				case preferencesChan <- prefs:
+					log.Info().Msg("ingest preferences updated")
+				default:
+					log.Warn().Msg("ingest preferences not updated")
+				}
 			}
 		}
 	})
@@ -75,6 +80,7 @@ func ingestRoutine(exitChan <-chan struct{}) {
 
 	cancel()
 	close(reconnectExitChan)
+	close(updatePreferencesExitChan)
 
 	wg.Wait()
 
