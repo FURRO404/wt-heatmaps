@@ -3,6 +3,7 @@ package frontend
 import "fmt"
 import "math"
 import "time"
+import "strings"
 
 templ Page(content templ.Component) {
 	<!DOCTYPE html>
@@ -16,14 +17,15 @@ templ Page(content templ.Component) {
 			// <script src="/static/htmx-ext-ws.min.js"></script>
 		</head>
 		<body>
+			<style>
+				.title{font-weight: bold;font-size: larger;margin-right: 1em;}
+				.header > span > a {margin-right: 1em;}
+			</style>
 			<nav class="header">
-				<style>
-					.title{font-weight: bold;font-size: larger;margin-right: 1em;}
-					.headerLink{margin-right: 1em;}
-				</style>
 				<span class="title">War Thunder Heatmaps</span>
-				<span class="headerLink"><a href="/">View</a></span>
-				<span class="headerLink"><a href="/stats">Stats</a></span>
+				<span><a href="/">View</a></span>
+				<span><a href="/stats">Stats</a></span>
+				<span><a href="/about">About</a></span>
 				<span style="float: right;"><small>by flexcoral</small></span>
 			</nav>
 			@content
@@ -54,13 +56,36 @@ templ Index(levels []LevelStat, vehicles []string) {
 						filter: brightness(35%)
 					}
 				</style>
+				<text x="200" y="280" style="font: bold 80px sans-serif; fill: #ddd;">
+					Select the map and press "Load"
+				</text>
+				<text x="200" y="380" style="font: normal 40px sans-serif; fill: #aaa;">
+					Data is being rendered in real time with a LOT of data points on very low power hardware,
+				</text>
+				<text x="200" y="420" style="font: normal 40px sans-serif; fill: #aaa;">
+					please be patient, it can take few seconds for it to load.
+				</text>
 				<image style="image-rendering: pixelated;" id="tankmap"></image>
 				<image style="image-rendering: pixelated; width:2048px; height:2048px" id="heat"></image>
 			</svg>
 		</div>
-		<div id="settingsDiv" class="settings">
+		<div id="settingsDiv" style="max-width: 600px" class="settings">
+			<p>
+				This project renders kill-death delta for each map pixel (meter) on the given
+				War Thunder ground map. Database contains only ground to ground kills and deaths, player account IDs,
+				vehicle names, weapon (ammo) used and their positions. Only from realistic battles mode.
+				<br/>
+				Blue indicates more people died there than made kills, red is reverse.
+				Logically, avoid being at blue spots and go to or check out red ones.
+				Black is used as intermediary color to show available but fair positions.
+				<br/>
+				Also clearly shows comically overpowered or absurd positions.
+				<br/>
+				Controls: drag to pan, scroll to zoom, double click to reset viewport
+			</p>
+			<p>Display settings:</p>
 			<form id="settingsForm">
-				<p style="white-space: nowrap">
+				<p>
 					<label for="level">Map:</label>
 					<button type="button" popovertarget="levelSelector">Select</button>
 					<input id="settingsFormLevelInput" name="level" readonly/>
@@ -91,42 +116,55 @@ templ Index(levels []LevelStat, vehicles []string) {
 						</table>
 					</div>
 				</p>
-				<p style="white-space: nowrap">
-					<label for="scoreIntensity">Score intensity:</label>
+				<p>
+					<label for="scoreIntensity">Exposure</label>
 					<input name="scoreIntensity" type="number" value="32" min="1" max="255"/>
-				</p>
-				<p style="white-space: nowrap">
-					<label for="countIntensity">Count intensity:</label>
+					<label for="countIntensity">Brightness</label>
 					<input name="countIntensity" type="number" value="32" min="1" max="255"/>
+					<br/>
+					<small>
+						Following multipliers directly control k/d score exposure and intensity (brightness):
+						<br/>
+						exposure being how big of a delta sways to red/green (bigger ⇒ more solid colors) and
+						<br/>
+						brightness being amount of data points available (bigger ⇒ less transparent).
+						<br/>
+						For example, 8+64 can be used to find <i>especially high</i> k/d positions while dimming down
+						floating noise whereas 64+255 will just fill the screen with the "average",
+						no matter how much data is available or how conclusive it might be.
+					</small>
 				</p>
-				<p style="white-space: nowrap">
+				<p>
 					<label for="killerTeam">Killer team:</label>
 					<input name="killerTeam" type="number" value="" min="1" max="2"/>
 				</p>
-				<p style="white-space: nowrap">
-					<label for="killTimeMin">Kill time min (seconds):</label>
+				<p>
+					<label for="killTimeMin">Kill time (seconds) min</label>
 					<input name="killTimeMin" type="number" value="" min="0" max="1800"/>
-				</p>
-				<p style="white-space: nowrap">
-					<label for="killTimeMax">Kill time max (seconds):</label>
+					<label for="killTimeMax">max</label>
 					<input name="killTimeMax" type="number" value="" min="0" max="1800"/>
+					<br/>
+					<small>First <i>spawns</i> actually occur at around 40 second mark, offset filters accordingly.</small>
 				</p>
-				<p><small>Note: first spawns actually occur at around 40 second mark, offset filters accordingly!</small> </p>
-				<p style="white-space: nowrap">
+				<p>
 					<label for="killerVehicle">Killer vehicle:</label>
 					<select name="killerVehicle">
 						<option selected></option>
 						for _, v := range vehicles {
-							<option>{ v }</option>
+							if strings.HasPrefix(v, "tankmodels/") {
+								<option>{ v }</option>
+							}
 						}
 					</select>
+					<br/>
+					<small>Per-vehicle statistics is pretty much non-existing so crank up exposure/brightness.</small>
 				</p>
 				<p>
-					<button type="submit" id="settingsSubmitBtn">Load</button>
+					<button type="submit" id="settingsSubmitBtn"><span style="font-size: larger;font-weight: bold;">Load</span></button>
 				</p>
 			</form>
 			<p>
-				<div><label for="brightness">Map brightness:</label></div>
+				<div><label for="brightness">Map brightness</label></div>
 				<input id="tankmapBrightnessSlider" name="brightness" type="range" min="0" max="100" value="35"/>
 			</p>
 			<div id="offsetsDisplay"></div>
