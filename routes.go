@@ -29,8 +29,9 @@ func makeHTTPServeMux() http.HandlerFunc {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", httpLog(handle404))
 	mux.HandleFunc("GET /static/", httpLog(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))).ServeHTTP))
-	mux.HandleFunc("GET /{$}", httpLog(compRender(serveIndex)))
-	mux.HandleFunc("GET /stats", httpLog(compRender(serveStats)))
+	mux.HandleFunc("GET /{$}", httpLog(compRenderFn(serveIndex)))
+	mux.HandleFunc("GET /stats", httpLog(compRenderFn(serveStats)))
+	mux.HandleFunc("GET /about", httpLog(compRender(frontend.Page(frontend.About()))))
 	// mux.HandleFunc("GET /waitroom/{p...}", httpLog(compRender(seveWaitroom)))
 
 	mux.HandleFunc("GET /minimap/{size}/{k...}", serveCachedMinimaps)
@@ -238,12 +239,18 @@ func serveHeat(w http.ResponseWriter, r *http.Request) {
 	log.Info().Dur("perf", time.Since(perf)).Int("nPix", len(tally)).Int("nDp", totalN).Msg("heat")
 }
 
-func compRender(f func(w http.ResponseWriter, r *http.Request) templ.Component) func(w http.ResponseWriter, r *http.Request) {
+func compRenderFn(f func(w http.ResponseWriter, r *http.Request) templ.Component) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c := f(w, r)
 		if c != nil {
 			c.Render(r.Context(), w)
 		}
+	}
+}
+
+func compRender(c templ.Component) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c.Render(r.Context(), w)
 	}
 }
 
