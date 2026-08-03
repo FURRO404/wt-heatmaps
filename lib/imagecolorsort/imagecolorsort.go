@@ -60,18 +60,12 @@ func score(img *image.RGBA) int {
 
 	var sumR, sumG, sumB uint64
 	pixelCount := width * height
-	stride := img.Stride
 
 	// Directly index Pix array for efficiency
-	for y := 0; y < height; y++ {
-		offset := y * stride
-		for x := 0; x < width; x++ {
-			idx := offset + x*4 // RGBA: 4 bytes per pixel
-			sumR += uint64(img.Pix[idx])
-			sumG += uint64(img.Pix[idx+1])
-			sumB += uint64(img.Pix[idx+2])
-			// Skip alpha channel
-		}
+	for i := 0; i < len(img.Pix)-3; i += 4 {
+		sumR += uint64(img.Pix[i])
+		sumG += uint64(img.Pix[i+1])
+		sumB += uint64(img.Pix[i+2])
 	}
 
 	// Calculate average color
