@@ -212,7 +212,7 @@ func (s *KillsStorage) StoreKills(toinsert []Kill) error {
 				s.lock.Unlock()
 				return fmt.Errorf("partition %q %q create: %w", t.String(), t2.String(), err)
 			}
-			s.db.Exec(context.Background(), fmt.Sprintf(`create index on %s (level);`, tableName))
+			s.db.Exec(context.Background(), fmt.Sprintf(`create index if not exists kills_y%dm%dd%d_level_idx on %s (level);`, t.Year(), t.Month(), t.Day(), tableName))
 			s.partitions = append(s.partitions, tableName)
 		}
 	}
