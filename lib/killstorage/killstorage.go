@@ -278,15 +278,32 @@ func (s *KillsStorage) QueryWithLevel(q *QueryConditions, level string) {
 	q.whereConds = append(q.whereConds, fmt.Sprintf("level = $%d", len(q.whereArgs)))
 }
 
-func (s *KillsStorage) QueryWithKillerVehicle(q *QueryConditions, vehicle string) {
+func (s *KillsStorage) QueryWithKillerVehicles(q *QueryConditions, vehicles []string) {
 	s.lock.Lock()
-	vehicleID, ok := s.cVehicles.GetExistingIDNOLOCK(vehicle)
-	s.lock.Unlock()
-	if !ok {
-		return
+	vehicleIDs := make([]int, 0, len(vehicles))
+	for _, v := range vehicles {
+		id, ok := s.cVehicles.GetExistingIDNOLOCK(v)
+		if ok {
+			vehicleIDs = append(vehicleIDs, id)
+		}
 	}
-	q.whereArgs = append(q.whereArgs, vehicleID)
-	q.whereConds = append(q.whereConds, fmt.Sprintf("killer_vehicle = $%d", len(q.whereArgs)))
+	s.lock.Unlock()
+	q.whereArgs = append(q.whereArgs, vehicleIDs)
+	q.whereConds = append(q.whereConds, fmt.Sprintf("killer_vehicle = any($%d)", len(q.whereArgs)))
+}
+
+func (s *KillsStorage) QueryWithVictimVehicles(q *QueryConditions, vehicles []string) {
+	s.lock.Lock()
+	vehicleIDs := make([]int, 0, len(vehicles))
+	for _, v := range vehicles {
+		id, ok := s.cVehicles.GetExistingIDNOLOCK(v)
+		if ok {
+			vehicleIDs = append(vehicleIDs, id)
+		}
+	}
+	s.lock.Unlock()
+	q.whereArgs = append(q.whereArgs, vehicleIDs)
+	q.whereConds = append(q.whereConds, fmt.Sprintf("victim_vehicle = any($%d)", len(q.whereArgs)))
 }
 
 func (q *QueryConditions) QueryWithSessionTimeMin(tsFrom time.Time) {
@@ -314,8 +331,12 @@ func (q *QueryConditions) QueryWithKillTimeMax(killTimeMax time.Duration) {
 	q.whereConds = append(q.whereConds, fmt.Sprintf("kill_time <= $%d", len(q.whereArgs)))
 }
 
-func (q *QueryConditions) whereCase() string {
+func (q *QueryConditions) WhereCase() string {
 	return "WHERE " + strings.Join(q.whereConds, " AND ")
+}
+
+func (q *QueryConditions) Dump() string {
+	return "WHERE " + strings.Join(q.whereConds, " AND ") + "\n" + spew.Sdump(q.whereArgs)
 }
 
 type KillTally struct {
@@ -336,7 +357,7 @@ CROSS JOIN LATERAL (
     (t.killer_posx, t.killer_posz,  1),
     (t.victim_posx, t.victim_posz, -1)
 ) AS p(x, z, delta)
-` + conds.whereCase() + `
+` + conds.WhereCase() + `
 GROUP BY (ROUND(p.x))::int, (ROUND(p.z))::int;`
 	rows, err := s.db.Query(ctx, q, conds.whereArgs...)
 	if err != nil {

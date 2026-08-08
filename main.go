@@ -37,16 +37,26 @@ func main() {
 	log.Info().Msg("hello world")
 
 	var err error
+
+	log.Info().Msg("connecting to database")
 	ks, err = killstorage.NewKillsStorage(cfg.GetDString(`database=thunder user=thunder password=warthunder_analytics_or_something`, "db"))
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
+		log.Fatal().Err(err).Msg("db connect")
 	}
 
+	log.Info().Msg("opening tankmaps cache")
 	tankmapsCache, err = caches.NewFetchFileCache(cfg.GetDString("./cache/tankmaps/", "cacheTankmaps"), fetchTankmap)
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
+		log.Fatal().Err(err).Msg("tankmaps cache init")
 	}
 
+	log.Info().Msg("loading wpcost")
+	err = wpcostLoad()
+	if err != nil {
+		log.Fatal().Err(err).Msg("wpcost load")
+	}
+
+	log.Info().Msg("loading level names")
 	initLevelNames()
 
 	ctx, ctxCancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -55,9 +65,10 @@ func main() {
 	stopHttp := goflexutils.StartBackgroundRoutine(log.Logger, "http", httpRoutine)
 	stopIngest := goflexutils.StartBackgroundRoutine(log.Logger, "ingest", ingestRoutine)
 
-	go levelStatsSorted.Get()
-	go statsCache.Get()
+	go reportCall(func() { levelStatsSorted.Get() }, "warming level sorting cache")
+	go reportCall(func() { statsCache.Get() }, "warming stat tables cache")
 
+	log.Info().Msg("init done")
 	<-ctx.Done()
 	log.Info().Msg("shutting down")
 
@@ -66,6 +77,12 @@ func main() {
 	ks.Close()
 
 	log.Info().Msg("bye")
+}
+
+func reportCall(fn func(), name string) {
+	log.Info().Msg(name)
+	fn()
+	log.Info().Msg("done " + name)
 }
 
 func configLoad(configPath string) {

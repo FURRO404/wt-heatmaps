@@ -16,6 +16,7 @@ import (
 	"maps"
 	"math"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"time"
@@ -120,7 +121,7 @@ func serveIndex(w http.ResponseWriter, r *http.Request) templ.Component {
 	levels := levelStatsSorted.Get()
 	vehicles := slices.Collect(maps.Values(ks.GetDictVehicles()))
 	slices.Sort(vehicles)
-	return frontend.Page(frontend.Index(levels, vehicles))
+	return frontend.Page(frontend.Index(levels, battleRatingGetter.GetRankMax()))
 }
 
 func getSortedLevelStats() []frontend.LevelStat {
@@ -165,31 +166,30 @@ func serveHeat(w http.ResponseWriter, r *http.Request) {
 
 	kq := &killstorage.QueryConditions{} //(time.Now().Add(-7*24*time.Hour), time.Now())
 	ks.QueryWithLevel(kq, level)
-	killerTeamStr := q.Get("killerTeam")
-	if killerTeamStr != "" {
-		killerTeam, err := strconv.Atoi(killerTeamStr)
-		if err == nil {
-			kq.QueryWithKillerTeam(killerTeam)
+	if val := urlValueInt(q, "killerTeam"); val != nil {
+		kq.QueryWithKillerTeam(*val)
+	}
+	if val := urlValueInt(q, "killTimeMin"); val != nil {
+		kq.QueryWithKillTimeMin(time.Duration(*val) * time.Second)
+	}
+	if val := urlValueInt(q, "killTimeMax"); val != nil {
+		kq.QueryWithKillTimeMax(time.Duration(*val) * time.Second)
+	}
+	if val := battleRatingGetter.GetAllInRange(urlValueInt(q, "killerBattleRatingMin"), urlValueInt(q, "killerBattleRatingMax")); val != nil {
+		for i := range val {
+			val[i] = "tankmodels/" + val[i]
 		}
+		ks.QueryWithKillerVehicles(kq, val)
 	}
-	killTimeMinStr := q.Get("killTimeMin")
-	if killTimeMinStr != "" {
-		killTimeMin, err := strconv.Atoi(killTimeMinStr)
-		if err == nil {
-			kq.QueryWithKillTimeMin(time.Duration(killTimeMin) * time.Second)
+	if val := battleRatingGetter.GetAllInRange(urlValueInt(q, "victimBattleRatingMin"), urlValueInt(q, "victimBattleRatingMax")); val != nil {
+		for i := range val {
+			val[i] = "tankmodels/" + val[i]
 		}
+		ks.QueryWithVictimVehicles(kq, val)
 	}
-	killTimeMaxStr := q.Get("killTimeMax")
-	if killTimeMaxStr != "" {
-		killTimeMax, err := strconv.Atoi(killTimeMaxStr)
-		if err == nil {
-			kq.QueryWithKillTimeMax(time.Duration(killTimeMax) * time.Second)
-		}
-	}
-	killerVehicle := q.Get("killerVehicle")
-	if killerVehicle != "" {
-		ks.QueryWithKillerVehicle(kq, killerVehicle)
-	}
+
+	// log.Info().Msg(kq.Dump())
+
 	tally, err := ks.GetKillCountsByCoord(r.Context(), kq)
 	if err != nil {
 		log.Err(err).Msg("get kills")
@@ -206,25 +206,18 @@ func serveHeat(w http.ResponseWriter, r *http.Request) {
 	outputH := int(areaH)
 	out := image.NewRGBA(image.Rect(0, 0, outputW, outputH))
 
-	scoreIntensityStr := q.Get("scoreIntensity")
-	scoreIntensity, err := strconv.Atoi(scoreIntensityStr)
-	if err != nil {
-		scoreIntensity = 32
-	}
-	countIntensityStr := q.Get("countIntensity")
-	countIntensity, err := strconv.Atoi(countIntensityStr)
-	if err != nil {
-		countIntensity = 32
-	}
+	scoreIntensity := urlValueIntOr(q, "scoreIntensity", 32)
+	countIntensity := urlValueIntOr(q, "countIntensity", 32)
 
 	// log.Info().Msgf("scale %f %f area %f %f offsets %#v", scaleW, scaleH, areaW, areaH, levelOffsets)
 	totalN := 0
 	for _, v := range tally {
 		tx := math.Round(float64(float64((float32(v.X)-areaOffsetX)/areaW) * float64(outputW)))
 		tz := math.Round(float64(float64(1-(float32(v.Z)-areaOffsetZ)/areaH) * float64(outputH)))
+
 		out.SetRGBA(int(tx), int(tz), color.RGBA{
 			R: uint8(max(min(v.Score*scoreIntensity, 255), 0)),
-			G: 0,
+			G: uint8(max(min(v.Score*v.Score, 255), 0) / 2),
 			B: uint8(max(min(-v.Score*scoreIntensity, 255), 0)),
 			A: uint8(min(v.Count*countIntensity, 255)),
 		})
@@ -237,6 +230,28 @@ func serveHeat(w http.ResponseWriter, r *http.Request) {
 		time.Now().Round(0).String(),
 	).EncodePNG(w)
 	log.Info().Dur("perf", time.Since(perf)).Int("nPix", len(tally)).Int("nDp", totalN).Msg("heat")
+}
+
+func urlValueInt(vals url.Values, name string) *int {
+	if !vals.Has(name) {
+		return nil
+	}
+	ret, err := strconv.Atoi(vals.Get(name))
+	if err != nil {
+		return nil
+	}
+	return &ret
+}
+
+func urlValueIntOr(vals url.Values, name string, or int) int {
+	if !vals.Has(name) {
+		return or
+	}
+	ret, err := strconv.Atoi(vals.Get(name))
+	if err != nil {
+		return or
+	}
+	return ret
 }
 
 func compRenderFn(f func(w http.ResponseWriter, r *http.Request) templ.Component) func(w http.ResponseWriter, r *http.Request) {
