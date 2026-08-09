@@ -123,7 +123,7 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 	}
 	i := 0
 	for _, v := range slices.Backward(amounts) {
-		if i >= 10 {
+		if i >= 20 {
 			break
 		}
 		if v.LevelName == "levels/avg_nuclear_incident.bin" {
