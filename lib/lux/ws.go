@@ -110,13 +110,20 @@ func FetchFromLux(log zerolog.Logger, exitChan <-chan struct{}, carvesChan chan<
 				log.Info().Str("data", string(msg)).Msg("text frame")
 			case websocket.BinaryFrame:
 				// log.Info().Int("data", len(msg)).Msg("binary frame")
+				timings := time.Now()
 				msgDecompressed, errRead = zstd.Decompress(msgDecompressed, msg)
+				timingsDecomp := time.Since(timings)
 				if errRead != nil {
 					wsClose()
 					return
 				}
 				var carve LuxCarve
+				timings = time.Now()
 				errRead = msgpack.Unmarshal(msgDecompressed, &carve)
+				timingsParse := time.Since(timings)
+				log.Info().Str("timingsDecomp", timingsDecomp.Round(time.Nanosecond).String()).
+					Str("timingsParse", timingsParse.Round(time.Nanosecond).String()).
+					Int("len", len(msgDecompressed)).Msg("got battle report")
 				if errRead != nil {
 					wsClose()
 					return
