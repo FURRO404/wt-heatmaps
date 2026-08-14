@@ -332,10 +332,13 @@ func (q *QueryConditions) QueryWithKillTimeMax(killTimeMax time.Duration) {
 	q.whereConds = append(q.whereConds, fmt.Sprintf("kill_time <= $%d", len(q.whereArgs)))
 }
 
+// QueryWithArea keeps the kills inside a box of world meters. The low edge
+// counts and the high edge does not, so two boxes that touch do not count a
+// kill on the line they share two times.
 func (q *QueryConditions) QueryWithArea(x0, z0, x1, z1 float64) {
 	q.whereArgs = append(q.whereArgs, min(x0, x1), max(x0, x1), min(z0, z1), max(z0, z1))
 	n := len(q.whereArgs)
-	q.whereConds = append(q.whereConds, fmt.Sprintf("p.x between $%d and $%d and p.z between $%d and $%d", n-3, n-2, n-1, n))
+	q.whereConds = append(q.whereConds, fmt.Sprintf("p.x >= $%d and p.x < $%d and p.z >= $%d and p.z < $%d", n-3, n-2, n-1, n))
 }
 
 func (q *QueryConditions) WhereCase() string {

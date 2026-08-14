@@ -167,7 +167,6 @@ templ Index(levels []LevelStat, battleRatingMax int) {
 					</small>
 				</p>
 			</form>
-			<div id="areaStats"></div>
 			<p>
 				<div><label for="brightness">Map brightness</label></div>
 				<input id="tankmapBrightnessSlider" name="brightness" type="range" min="0" max="100" value="35"/>
@@ -175,6 +174,7 @@ templ Index(levels []LevelStat, battleRatingMax int) {
 			<div id="offsetsDisplay"></div>
 			<div id="msgDisplay"></div>
 		</div>
+		<div id="areaStats" class="areastats"></div>
 	</div>
 	<script type="module" src="/static/main.js"></script>
 }
@@ -236,7 +236,10 @@ templ AreaStats(stats []AreaVehicleStat, widthMeters, heightMeters, total, limit
 			<tbody>
 				for _, v := range stats {
 					<tr>
-						<td>{ v.Vehicle }</td>
+						<td>
+							<img class="vehicleIcon" src={ "https://static.encyclopedia.warthunder.com/slots/" + v.Vehicle + ".png" } alt="" loading="lazy" onerror="this.remove()"/>
+							{ v.Vehicle }
+						</td>
 						<td>{ v.Kills }</td>
 						<td>{ v.Deaths }</td>
 						<td>{ KillDeathRatio(v.Kills, v.Deaths) }</td>

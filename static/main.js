@@ -76,13 +76,50 @@ form.addEventListener("submit", (e) => {
 	if (f.get("level") == "") {
 		return;
 	}
-	document
-		.getElementById("heat")
-		.setAttribute("href", "/heat?" + new URLSearchParams(f).toString());
+	loadHeat("/heat?" + new URLSearchParams(f).toString());
 	document
 		.getElementById("tankmap")
 		.setAttribute("href", "/minimap/2048/" + f.get("level"));
 });
+
+// The heatmap is one pixel per world meter, so its own pixel size is the grid
+// an area selection snaps to. An svg image gives no intrinsic size, so the
+// bytes come through fetch and go into the image as a blob. That is one
+// request, and the size is known by the time the map is on the screen.
+const heatImage = document.getElementById("heat");
+let heatGrid = null;
+let heatBlobUrl = null;
+let heatLoad = 0;
+
+async function loadHeat(url) {
+	const load = ++heatLoad;
+	heatGrid = null;
+	const probe = new Image();
+	try {
+		const resp = await fetch(url);
+		if (!resp.ok) {
+			return;
+		}
+		probe.src = URL.createObjectURL(await resp.blob());
+		// a 204 answer carries no image, so this rejects and the map stays
+		await probe.decode();
+	} catch {
+		if (probe.src != "") {
+			URL.revokeObjectURL(probe.src);
+		}
+		return;
+	}
+	if (load != heatLoad) {
+		URL.revokeObjectURL(probe.src);
+		return;
+	}
+	if (heatBlobUrl != null) {
+		URL.revokeObjectURL(heatBlobUrl);
+	}
+	heatBlobUrl = probe.src;
+	heatGrid = { w: probe.naturalWidth, h: probe.naturalHeight };
+	heatImage.setAttribute("href", heatBlobUrl);
+}
 
 var applySettingsLevel = (e) => {
 	console.log(e);
@@ -106,12 +143,26 @@ function setSelectMode(on) {
 	selectBtn.style.fontWeight = on ? "bold" : "";
 }
 
+// snapToGrid puts a map coordinate on the nearest edge between two heatmap
+// pixels, and holds it inside the map. cells is the pixel count of the heatmap
+// on that axis, one pixel being one world meter.
+function snapToGrid(v, cells) {
+	const cell = Math.min(Math.max(Math.round((v / mapSize) * cells), 0), cells);
+	return (cell / cells) * mapSize;
+}
+
 function svgPoint(e) {
 	const rect = svg.getBoundingClientRect();
-	return {
+	const p = {
 		x: vb.x + ((e.clientX - rect.left) / rect.width) * vb.w,
 		y: vb.y + ((e.clientY - rect.top) / rect.height) * vb.h,
 	};
+	// a map with no heatmap on it yet has no grid to snap to
+	if (heatGrid != null) {
+		p.x = snapToGrid(p.x, heatGrid.w);
+		p.y = snapToGrid(p.y, heatGrid.h);
+	}
+	return p;
 }
 
 function drawSelection(to) {

@@ -24,12 +24,18 @@ type LevelCoords struct {
 // world meters. It inverts the transform that the heatmap is painted with, so
 // the z axis grows upwards while the view grows downwards. A fraction outside
 // 0 to 1 is clamped to the edge of the map.
+//
+// A fraction of the view names the edge between two heatmap pixels, but a
+// heatmap pixel holds the kills that round to its own whole meter. The edge
+// therefore sits half a meter below the center of the pixel on x, and half a
+// meter above it on z, which the flipped axis reverses. The half meter here
+// keeps the box the browser drew and the box the query counts the same.
 func (c LevelCoords) TankMapAreaToWorld(box [4]float64) (x0, z0, x1, z1 float64) {
 	for i, v := range box {
 		box[i] = min(max(v, 0), 1)
 	}
-	originX := float64(c.TankMap0[0])
-	originZ := float64(c.TankMap0[1])
+	originX := float64(c.TankMap0[0]) - 0.5
+	originZ := float64(c.TankMap0[1]) + 0.5
 	areaW := math.Abs(float64(c.TankMap0[0] - c.TankMap1[0]))
 	areaH := math.Abs(float64(c.TankMap0[1] - c.TankMap1[1]))
 	return originX + box[0]*areaW,

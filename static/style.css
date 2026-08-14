@@ -18,25 +18,80 @@ body {
 	font-size: large;
 }
 
+/* --mapsize is the biggest square the map can be when the page height limits
+   it, --mapw the width the map really gets in the layout below */
 .content {
-	display: flex;
-	flex-wrap: wrap;
+	--mapsize: calc(100vh - 2rem - 4rem);
+	--mapw: 100%;
+	display: grid;
+	grid-template-areas: "map" "settings" "area";
+	align-items: start;
 	padding: 1rem;
 	gap: 1rem;
 }
 
 .content > div.map {
-	flex: 0 1 auto;
-	min-width: 200px;
-	max-width: calc(100vh - 2rem - 4rem);
-	width: 100%;
+	grid-area: map;
+	box-sizing: border-box;
+	width: var(--mapw);
+	max-width: var(--mapsize);
 	aspect-ratio: 1 / 1;
 	border: 1px solid white;
 }
 
+/* an inline svg leaves a baseline gap under itself, which makes the map taller
+   than it is wide */
+.content > div.map > svg {
+	display: block;
+}
+
 .content > div.settings {
-	flex: 0 1 auto;
-	min-width: 200px;
+	grid-area: settings;
+}
+
+.content > div.areastats {
+	grid-area: area;
+	min-width: 0;
+	overflow: auto;
+}
+
+/* the map and the settings share the top row, the table goes under both */
+@media (min-aspect-ratio: 3/4) {
+	.content {
+		--mapw: min(var(--mapsize), 55vw);
+		grid-template-areas: "map settings" "area area";
+		grid-template-columns: auto 1fr;
+	}
+
+	.content > div.settings {
+		max-height: var(--mapw);
+		overflow-y: auto;
+	}
+}
+
+/* the map takes the height of the page, the settings and the table stack beside it */
+@media (min-aspect-ratio: 4/3) {
+	.content {
+		--mapw: var(--mapsize);
+		grid-template-areas: "map settings" "map area";
+		grid-template-rows: minmax(0, 1fr) minmax(0, auto);
+		height: var(--mapsize);
+	}
+
+	.content > div.settings {
+		align-self: stretch;
+		min-height: 0;
+	}
+
+	.content > div.areastats {
+		max-height: calc(var(--mapsize) / 2);
+	}
+}
+
+.vehicleIcon {
+	max-height: 1em;
+	vertical-align: middle;
+	margin-right: 0.4em;
 }
 
 select,
