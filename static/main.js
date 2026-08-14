@@ -76,7 +76,9 @@ form.addEventListener("submit", (e) => {
 	if (f.get("level") == "") {
 		return;
 	}
-	loadHeat("/heat?" + new URLSearchParams(f).toString());
+	// the table on the page counted the filters as they were, so it goes
+	setAreaLoaded(false);
+	loadHeat(f.get("level"), "/heat?" + new URLSearchParams(f).toString());
 	document
 		.getElementById("tankmap")
 		.setAttribute("href", "/minimap/2048/" + f.get("level"));
@@ -87,13 +89,15 @@ form.addEventListener("submit", (e) => {
 // bytes come through fetch and go into the image as a blob. That is one
 // request, and the size is known by the time the map is on the screen.
 const heatImage = document.getElementById("heat");
-let heatGrid = null;
-let heatBlobUrl = null;
+const heatLoading = document.getElementById("heatLoading");
+// heat is the heatmap on the screen, or null while there is none. A load that
+// fails leaves the one before it up, so this always tells what the user sees.
+let heat = null;
 let heatLoad = 0;
 
-async function loadHeat(url) {
+async function loadHeat(level, url) {
 	const load = ++heatLoad;
-	heatGrid = null;
+	heatLoading.classList.add("loading");
 	const probe = new Image();
 	try {
 		const resp = await fetch(url);
@@ -108,17 +112,21 @@ async function loadHeat(url) {
 			URL.revokeObjectURL(probe.src);
 		}
 		return;
+	} finally {
+		// the note belongs to the newest load, so an overtaken one leaves it up
+		if (load == heatLoad) {
+			heatLoading.classList.remove("loading");
+		}
 	}
 	if (load != heatLoad) {
 		URL.revokeObjectURL(probe.src);
 		return;
 	}
-	if (heatBlobUrl != null) {
-		URL.revokeObjectURL(heatBlobUrl);
+	if (heat != null) {
+		URL.revokeObjectURL(heat.url);
 	}
-	heatBlobUrl = probe.src;
-	heatGrid = { w: probe.naturalWidth, h: probe.naturalHeight };
-	heatImage.setAttribute("href", heatBlobUrl);
+	heat = { level, w: probe.naturalWidth, h: probe.naturalHeight, url: probe.src };
+	heatImage.setAttribute("href", heat.url);
 }
 
 // area selection, drags a box and asks the server for the vehicles in it
@@ -126,10 +134,16 @@ async function loadHeat(url) {
 const mapSize = 2048;
 const selectBtn = document.getElementById("areaSelectBtn");
 const selectRect = document.getElementById("areaSelect");
+const areaResults = document.getElementById("areaStatsResults");
 let selectMode = false;
 let selectFrom = null;
+let areaLoaded = false;
 
 selectBtn.addEventListener("click", () => {
+	if (areaLoaded) {
+		setAreaLoaded(false);
+		return;
+	}
 	setSelectMode(!selectMode);
 });
 
@@ -137,6 +151,15 @@ function setSelectMode(on) {
 	selectMode = on;
 	svg.style.cursor = on ? "crosshair" : "";
 	selectBtn.style.fontWeight = on ? "bold" : "";
+}
+
+function setAreaLoaded(on) {
+	areaLoaded = on;
+	selectBtn.textContent = on ? "Clear area" : "Select area";
+	if (!on) {
+		selectRect.style.display = "none";
+		areaResults.innerHTML = "";
+	}
 }
 
 // snapToGrid puts a map coordinate on the nearest edge between two heatmap
@@ -154,9 +177,9 @@ function svgPoint(e) {
 		y: vb.y + ((e.clientY - rect.top) / rect.height) * vb.h,
 	};
 	// a map with no heatmap on it yet has no grid to snap to
-	if (heatGrid != null) {
-		p.x = snapToGrid(p.x, heatGrid.w);
-		p.y = snapToGrid(p.y, heatGrid.h);
+	if (heat != null) {
+		p.x = snapToGrid(p.x, heat.w);
+		p.y = snapToGrid(p.y, heat.h);
 	}
 	return p;
 }
@@ -194,18 +217,27 @@ svg.addEventListener("pointerup", (e) => {
 	const to = svgPoint(e);
 	selectFrom = null;
 	setSelectMode(false);
-	if (from.x == to.x || from.y == to.y) {
+	if (heat == null || from.x == to.x || from.y == to.y) {
 		selectRect.style.display = "none";
 		return;
 	}
-	const f = new FormData(form);
-	if (f.get("level") == "") {
-		return;
-	}
-	const p = new URLSearchParams(f);
+	const p = new URLSearchParams(new FormData(form));
+	// the box was drawn on the heatmap, so it belongs to the level the heatmap
+	// was drawn for, whatever the form says now. The other filters do come from
+	// the form, which is what the page promises.
+	p.set("level", heat.level);
 	p.set("u0", from.x / mapSize);
 	p.set("v0", from.y / mapSize);
 	p.set("u1", to.x / mapSize);
 	p.set("v1", to.y / mapSize);
-	htmx.ajax("GET", "/areastats?" + p.toString(), "#areaStatsResults");
+	// htmx swaps nothing when the server answers an error, and rejects when the
+	// request itself fails, so an empty table means the request got nowhere. A
+	// swap takes the note with it, and an answer that never came leaves it here.
+	areaResults.innerHTML =
+		'<div class="loadingNote"><span>area stats loading</span></div>';
+	const done = () => {
+		areaResults.querySelector(".loadingNote")?.remove();
+		setAreaLoaded(areaResults.innerHTML != "");
+	};
+	htmx.ajax("GET", "/areastats?" + p.toString(), "#areaStatsResults").then(done, done);
 });

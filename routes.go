@@ -149,6 +149,10 @@ func getSortedLevelStats() []frontend.LevelStat {
 	return levels
 }
 
+func getLevelOffsets(level string) (levelcoords.LevelCoords, error) {
+	return levelcoords.GetLevelCoordsCached(cfg.GetDString("cache/offsets.json", "cacheOffsets"), level)
+}
+
 func serveHeat(w http.ResponseWriter, r *http.Request) {
 	perf := time.Now()
 	q := r.URL.Query()
@@ -158,7 +162,7 @@ func serveHeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	levelOffsets, err := levelcoords.GetLevelCoordsCached(cfg.GetDString("cache/offsets.json", "cacheOffsets"), level)
+	levelOffsets, err := getLevelOffsets(level)
 	if err != nil {
 		log.Err(err).Msg("get level offsets")
 		w.WriteHeader(500)
@@ -256,7 +260,7 @@ func serveAreaStats(w http.ResponseWriter, r *http.Request) templ.Component {
 		return nil
 	}
 
-	levelOffsets, err := levelcoords.GetLevelCoordsCached(cfg.GetDString("cache/offsets.json", "cacheOffsets"), level)
+	levelOffsets, err := getLevelOffsets(level)
 	if err != nil {
 		log.Err(err).Msg("get level offsets")
 		w.WriteHeader(500)

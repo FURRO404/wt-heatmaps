@@ -31,6 +31,8 @@ body {
 
 .content > div.map {
 	grid-area: map;
+	position: relative;
+	container-type: size;
 	box-sizing: border-box;
 	width: var(--mapw);
 	max-width: var(--mapsize);
@@ -58,6 +60,48 @@ body {
 	border-radius: 0.8rem;
 	border: 1px solid #555;
 	padding: 0.5em;
+}
+
+/* a watermark that says something is on its way. It sits at 45 degrees and
+   barely above the background, so it says what it has to say and nothing more.
+   The box holds the height and clips, because a rotated line reaches further
+   than the line it was */
+.loadingNote {
+	position: relative;
+	height: 11rem;
+	overflow: hidden;
+}
+
+.loadingNote > span {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%) rotate(-45deg);
+	color: #ddd;
+	opacity: 0.09;
+	font-size: 1.2rem;
+	font-weight: bold;
+	text-transform: uppercase;
+	white-space: nowrap;
+	pointer-events: none;
+	user-select: none;
+}
+
+/* the map watermark lies over the map and moves nothing */
+#heatLoading {
+	position: absolute;
+	inset: 0;
+	height: auto;
+	display: none;
+}
+
+#heatLoading.loading {
+	display: block;
+}
+
+/* the watermark has to fit the map corner to corner, at any map size */
+#heatLoading > span {
+	font-size: min(2.5rem, 7cqw);
 }
 
 /* the map and the settings share the top row, the table goes under both */

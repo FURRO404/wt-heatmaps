@@ -407,8 +407,8 @@ JOIN vehicle_names n ON n.id = p.vehicle
 ` + conds.WhereCase() + `
 GROUP BY n.name
 ORDER BY COUNT(*) DESC
-LIMIT $` + strconv.Itoa(len(conds.whereArgs)+1) + `;`
-	rows, err := s.db.Query(ctx, q, slices.Concat(conds.whereArgs, []any{limit})...)
+LIMIT ` + strconv.Itoa(limit) + `;`
+	rows, err := s.db.Query(ctx, q, conds.whereArgs...)
 	if err != nil {
 		return nil, err
 	}
