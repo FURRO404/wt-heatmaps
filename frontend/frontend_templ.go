@@ -105,7 +105,7 @@ func Index(levels []LevelStat, battleRatingMax int) templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"content\"><div class=\"map\"><svg id=\"mapview\" width=\"100%\" height=\"100%\"><style>\n\t\t\t\t\t#tankmap {\n\t\t\t\t\t\tfilter: brightness(35%)\n\t\t\t\t\t}\n\t\t\t\t</style><text x=\"200\" y=\"280\" style=\"font: bold 80px sans-serif; fill: #ddd;\">Select the map and press \"Load\"</text> <text x=\"200\" y=\"380\" style=\"font: normal 40px sans-serif; fill: #aaa;\">Data is being rendered in real time with a LOT of data points on very low power hardware,</text> <text x=\"200\" y=\"420\" style=\"font: normal 40px sans-serif; fill: #aaa;\">please be patient, it can take few seconds for it to load.</text> <image style=\"image-rendering: pixelated;\" id=\"tankmap\"></image> <image style=\"image-rendering: pixelated; width:2048px; height:2048px\" id=\"heat\"></image> <rect id=\"areaSelect\" style=\"display: none; fill: #ffffff20; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke;\"></rect></svg><div id=\"heatLoading\" class=\"loadingNote\"><span>heatmap loading please wait</span></div></div><div id=\"settingsDiv\" class=\"settings\"><p>Display settings:</p><form id=\"settingsForm\"><p><label for=\"level\">Map:</label> <button type=\"button\" popovertarget=\"levelSelector\">Select</button> <input id=\"settingsFormLevelInput\" name=\"level\" readonly><div popover id=\"levelSelector\"><center><b>Select map:</b></center><table><thead><tr><th>Level name<br>Data points</th><th>Image</th></tr></thead> <tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"content\"><div class=\"map\"><svg id=\"mapview\" width=\"100%\" height=\"100%\"><style>\n\t\t\t\t\t#tankmap {\n\t\t\t\t\t\tfilter: brightness(35%)\n\t\t\t\t\t}\n\t\t\t\t</style><text x=\"200\" y=\"280\" style=\"font: bold 80px sans-serif; fill: #ddd;\">Select the map and press \"Load\"</text> <text x=\"200\" y=\"380\" style=\"font: normal 40px sans-serif; fill: #aaa;\">Data is being rendered in real time with a LOT of data points on very low power hardware,</text> <text x=\"200\" y=\"420\" style=\"font: normal 40px sans-serif; fill: #aaa;\">please be patient, it can take few seconds for it to load.</text> <image style=\"image-rendering: pixelated;\" id=\"tankmap\"></image> <image style=\"image-rendering: pixelated; width:2048px; height:2048px\" id=\"heat\"></image> <rect id=\"areaSelect\" style=\"display: none; fill: #ffffff20; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke;\"></rect></svg><div id=\"heatLoading\" class=\"loadingNoteRotated loadingNote\"><span>heatmap loading please wait</span></div></div><div id=\"settingsDiv\" class=\"settings\"><p>Display settings:</p><form id=\"settingsForm\"><p><label for=\"level\">Map:</label> <button type=\"button\" popovertarget=\"levelSelector\">Select</button> <input id=\"settingsFormLevelInput\" name=\"level\" readonly><div popover id=\"levelSelector\"><center><b>Select map:</b></center><table><thead><tr><th>Level name<br>Data points</th><th>Image</th></tr></thead> <tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -376,14 +376,14 @@ func AreaStats(stats []AreaVehicleStat, widthMeters, heightMeters, total, limit 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, " data points. Total K/D: ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, " data points. Average area K/D: ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(KillDeathRatio(globKills, globDeaths))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `frontend/frontend.templ`, Line: 221, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `frontend/frontend.templ`, Line: 221, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 			if templ_7745c5c3_Err != nil {
