@@ -61,7 +61,7 @@ body {
 }
 
 /* the map and the settings share the top row, the table goes under both */
-@media (min-aspect-ratio: 3/4) {
+@media (min-aspect-ratio: 3/4) and (width >= 970px) {
 	.content {
 		--mapw: min(var(--mapsize), 55vw);
 		grid-template-areas: "map settings" "area area";
@@ -75,7 +75,7 @@ body {
 }
 
 /* the map takes the height of the page, the settings and the table stack beside it */
-@media (min-aspect-ratio: 4/3) {
+@media (min-aspect-ratio: 4/3) and (width >= 970px)  {
 	.content {
 		--mapw: var(--mapsize);
 		grid-template-areas: "map settings" "map area";
