@@ -159,22 +159,25 @@ templ Index(levels []LevelStat, battleRatingMax int) {
 				</p>
 				<p>
 					<button type="submit" id="settingsSubmitBtn"><span style="font-size: larger;font-weight: bold;">Load</span></button>
-					<button type="button" id="areaSelectBtn">Select area</button>
-					<br/>
-					<small>
-						Press "Select area", then drag a box on the map to get the kills and deaths
-						of every vehicle in it. The filters above apply to the box as well.
-					</small>
 				</p>
-			</form>
 			<p>
 				<div><label for="brightness">Map brightness</label></div>
 				<input id="tankmapBrightnessSlider" name="brightness" type="range" min="0" max="100" value="35"/>
 			</p>
-			<div id="offsetsDisplay"></div>
-			<div id="msgDisplay"></div>
+			</form>
 		</div>
-		<div id="areaStats" class="areastats"></div>
+		<div class="areastats">
+			<p>
+				<button type="button" id="areaSelectBtn">Select area</button>
+				<br/>
+				<small>
+					Press "Select area", then drag a box on the map to get the kills and deaths
+					of every vehicle in it. The filters above apply to the box as well.
+				</small>
+			</p>
+			<div id="areaStatsResults">
+			</div>
+		</div>
 	</div>
 	<script type="module" src="/static/main.js"></script>
 }

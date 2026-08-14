@@ -121,10 +121,6 @@ async function loadHeat(url) {
 	heatImage.setAttribute("href", heatBlobUrl);
 }
 
-var applySettingsLevel = (e) => {
-	console.log(e);
-};
-
 // area selection, drags a box and asks the server for the vehicles in it
 
 const mapSize = 2048;
@@ -211,5 +207,5 @@ svg.addEventListener("pointerup", (e) => {
 	p.set("v0", from.y / mapSize);
 	p.set("u1", to.x / mapSize);
 	p.set("v1", to.y / mapSize);
-	htmx.ajax("GET", "/areastats?" + p.toString(), "#areaStats");
+	htmx.ajax("GET", "/areastats?" + p.toString(), "#areaStatsResults");
 });
