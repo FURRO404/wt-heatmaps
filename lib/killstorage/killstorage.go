@@ -332,6 +332,12 @@ func (q *QueryConditions) QueryWithKillTimeMax(killTimeMax time.Duration) {
 	q.whereConds = append(q.whereConds, fmt.Sprintf("kill_time <= $%d", len(q.whereArgs)))
 }
 
+func (q *QueryConditions) QueryWithArea(x0, z0, x1, z1 float64) {
+	q.whereArgs = append(q.whereArgs, min(x0, x1), max(x0, x1), min(z0, z1), max(z0, z1))
+	n := len(q.whereArgs)
+	q.whereConds = append(q.whereConds, fmt.Sprintf("p.x between $%d and $%d and p.z between $%d and $%d", n-3, n-2, n-1, n))
+}
+
 func (q *QueryConditions) WhereCase() string {
 	if len(q.whereConds) == 0 {
 		return ""
@@ -373,6 +379,38 @@ GROUP BY (ROUND(p.x))::int, (ROUND(p.z))::int;`
 	// log.Info().Msg(q)
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (ret KillTally, err error) {
 		err = row.Scan(&ret.X, &ret.Z, &ret.Score, &ret.Count)
+		return
+	})
+}
+
+type VehicleAreaStat struct {
+	Vehicle string
+	Kills   int
+	Deaths  int
+}
+
+func (s *KillsStorage) GetVehicleStatsByArea(ctx context.Context, conds *QueryConditions, limit int) ([]VehicleAreaStat, error) {
+	q := `SELECT
+  n.name,
+  COUNT(*) FILTER (WHERE p.delta > 0) AS kills,
+  COUNT(*) FILTER (WHERE p.delta < 0) AS deaths
+FROM kills t
+CROSS JOIN LATERAL (
+  VALUES
+    (t.killer_vehicle, t.killer_posx, t.killer_posz,  1),
+    (t.victim_vehicle, t.victim_posx, t.victim_posz, -1)
+) AS p(vehicle, x, z, delta)
+JOIN vehicle_names n ON n.id = p.vehicle
+` + conds.WhereCase() + `
+GROUP BY n.name
+ORDER BY COUNT(*) DESC
+LIMIT $` + strconv.Itoa(len(conds.whereArgs)+1) + `;`
+	rows, err := s.db.Query(ctx, q, slices.Concat(conds.whereArgs, []any{limit})...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (ret VehicleAreaStat, err error) {
+		err = row.Scan(&ret.Vehicle, &ret.Kills, &ret.Deaths)
 		return
 	})
 }

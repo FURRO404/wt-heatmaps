@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,6 +18,24 @@ type LevelCoords struct {
 	Map1     [2]float32 `json:"mapCoord1"`
 	TankMap0 [2]float32 `json:"tankMapCoord0"`
 	TankMap1 [2]float32 `json:"tankMapCoord1"`
+}
+
+// TankMapAreaToWorld turns a box given as fractions of the tank map view into
+// world meters. It inverts the transform that the heatmap is painted with, so
+// the z axis grows upwards while the view grows downwards. A fraction outside
+// 0 to 1 is clamped to the edge of the map.
+func (c LevelCoords) TankMapAreaToWorld(box [4]float64) (x0, z0, x1, z1 float64) {
+	for i, v := range box {
+		box[i] = min(max(v, 0), 1)
+	}
+	originX := float64(c.TankMap0[0])
+	originZ := float64(c.TankMap0[1])
+	areaW := math.Abs(float64(c.TankMap0[0] - c.TankMap1[0]))
+	areaH := math.Abs(float64(c.TankMap0[1] - c.TankMap1[1]))
+	return originX + box[0]*areaW,
+		originZ + (1-box[1])*areaH,
+		originX + box[2]*areaW,
+		originZ + (1-box[3])*areaH
 }
 
 var (

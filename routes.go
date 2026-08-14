@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/a-h/templ"
@@ -37,6 +38,7 @@ func makeHTTPServeMux() http.HandlerFunc {
 
 	mux.HandleFunc("GET /minimap/{size}/{k...}", serveCachedMinimaps)
 	mux.HandleFunc("GET /heat", httpLog(serveHeat))
+	mux.HandleFunc("GET /areastats", httpLog(compRenderFn(serveAreaStats)))
 
 	mux.HandleFunc("GET /missions...", httpLog(servePermaRedirect("/")))
 	mux.HandleFunc("GET /clans...", httpLog(servePermaRedirect("/")))
@@ -164,31 +166,10 @@ func serveHeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	kq := &killstorage.QueryConditions{} //(time.Now().Add(-7*24*time.Hour), time.Now())
-	if !ks.QueryWithLevel(kq, level) {
+	kq, ok := buildKillQuery(q, level)
+	if !ok {
 		w.WriteHeader(204)
 		return
-	}
-	if val := urlValueInt(q, "killerTeam"); val != nil {
-		kq.QueryWithKillerTeam(*val)
-	}
-	if val := urlValueInt(q, "killTimeMin"); val != nil {
-		kq.QueryWithKillTimeMin(time.Duration(*val) * time.Second)
-	}
-	if val := urlValueInt(q, "killTimeMax"); val != nil {
-		kq.QueryWithKillTimeMax(time.Duration(*val) * time.Second)
-	}
-	if val := battleRatingGetter.GetAllInRange(urlValueInt(q, "killerBattleRatingMin"), urlValueInt(q, "killerBattleRatingMax")); val != nil {
-		for i := range val {
-			val[i] = "tankmodels/" + val[i]
-		}
-		ks.QueryWithKillerVehicles(kq, val)
-	}
-	if val := battleRatingGetter.GetAllInRange(urlValueInt(q, "victimBattleRatingMin"), urlValueInt(q, "victimBattleRatingMax")); val != nil {
-		for i := range val {
-			val[i] = "tankmodels/" + val[i]
-		}
-		ks.QueryWithVictimVehicles(kq, val)
 	}
 
 	// log.Info().Msg(kq.Dump())
@@ -233,6 +214,92 @@ func serveHeat(w http.ResponseWriter, r *http.Request) {
 		time.Now().Round(0).String(),
 	).EncodePNG(w)
 	log.Info().Dur("perf", time.Since(perf)).Int("nPix", len(tally)).Int("nDp", totalN).Msg("heat")
+}
+
+func buildKillQuery(q url.Values, level string) (*killstorage.QueryConditions, bool) {
+	kq := &killstorage.QueryConditions{}
+	if !ks.QueryWithLevel(kq, level) {
+		return nil, false
+	}
+	if val := urlValueInt(q, "killerTeam"); val != nil {
+		kq.QueryWithKillerTeam(*val)
+	}
+	if val := urlValueInt(q, "killTimeMin"); val != nil {
+		kq.QueryWithKillTimeMin(time.Duration(*val) * time.Second)
+	}
+	if val := urlValueInt(q, "killTimeMax"); val != nil {
+		kq.QueryWithKillTimeMax(time.Duration(*val) * time.Second)
+	}
+	if val := battleRatingGetter.GetAllInRange(urlValueInt(q, "killerBattleRatingMin"), urlValueInt(q, "killerBattleRatingMax")); val != nil {
+		for i := range val {
+			val[i] = "tankmodels/" + val[i]
+		}
+		ks.QueryWithKillerVehicles(kq, val)
+	}
+	if val := battleRatingGetter.GetAllInRange(urlValueInt(q, "victimBattleRatingMin"), urlValueInt(q, "victimBattleRatingMax")); val != nil {
+		for i := range val {
+			val[i] = "tankmodels/" + val[i]
+		}
+		ks.QueryWithVictimVehicles(kq, val)
+	}
+	return kq, true
+}
+
+const areaStatsLimit = 50
+
+func serveAreaStats(w http.ResponseWriter, r *http.Request) templ.Component {
+	q := r.URL.Query()
+	level := q.Get("level")
+	box, ok := areaBoxFromQuery(q)
+	if level == "" || !ok {
+		w.WriteHeader(400)
+		return nil
+	}
+
+	levelOffsets, err := levelcoords.GetLevelCoordsCached(cfg.GetDString("cache/offsets.json", "cacheOffsets"), level)
+	if err != nil {
+		log.Err(err).Msg("get level offsets")
+		w.WriteHeader(500)
+		return nil
+	}
+	x0, z0, x1, z1 := levelOffsets.TankMapAreaToWorld(box)
+
+	kq, ok := buildKillQuery(q, level)
+	if !ok {
+		w.WriteHeader(204)
+		return nil
+	}
+	kq.QueryWithArea(x0, z0, x1, z1)
+
+	stats, err := ks.GetVehicleStatsByArea(r.Context(), kq, areaStatsLimit)
+	if err != nil {
+		log.Err(err).Msg("get vehicle stats by area")
+		w.WriteHeader(500)
+		return nil
+	}
+
+	rows := make([]frontend.AreaVehicleStat, len(stats))
+	total := 0
+	for i, v := range stats {
+		rows[i] = frontend.AreaVehicleStat{
+			Vehicle: strings.TrimPrefix(v.Vehicle, "tankmodels/"),
+			Kills:   v.Kills,
+			Deaths:  v.Deaths,
+		}
+		total += v.Kills + v.Deaths
+	}
+	return frontend.AreaStats(rows, int(math.Round(math.Abs(x1-x0))), int(math.Round(math.Abs(z1-z0))), total, areaStatsLimit)
+}
+
+func areaBoxFromQuery(vals url.Values) (box [4]float64, ok bool) {
+	for i, name := range []string{"u0", "v0", "u1", "v1"} {
+		v, err := strconv.ParseFloat(vals.Get(name), 64)
+		if err != nil || math.IsNaN(v) {
+			return box, false
+		}
+		box[i] = v
+	}
+	return box, box[0] != box[2] && box[1] != box[3]
 }
 
 func urlValueInt(vals url.Values, name string) *int {

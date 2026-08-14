@@ -66,6 +66,7 @@ templ Index(levels []LevelStat, battleRatingMax int) {
 				</text>
 				<image style="image-rendering: pixelated;" id="tankmap"></image>
 				<image style="image-rendering: pixelated; width:2048px; height:2048px" id="heat"></image>
+				<rect id="areaSelect" style="display: none; fill: #ffffff20; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke;"></rect>
 			</svg>
 		</div>
 		<div id="settingsDiv" style="max-width: 600px" class="settings">
@@ -158,8 +159,15 @@ templ Index(levels []LevelStat, battleRatingMax int) {
 				</p>
 				<p>
 					<button type="submit" id="settingsSubmitBtn"><span style="font-size: larger;font-weight: bold;">Load</span></button>
+					<button type="button" id="areaSelectBtn">Select area</button>
+					<br/>
+					<small>
+						Press "Select area", then drag a box on the map to get the kills and deaths
+						of every vehicle in it. The filters above apply to the box as well.
+					</small>
 				</p>
 			</form>
+			<div id="areaStats"></div>
 			<p>
 				<div><label for="brightness">Map brightness</label></div>
 				<input id="tankmapBrightnessSlider" name="brightness" type="range" min="0" max="100" value="35"/>
@@ -187,6 +195,56 @@ templ brSelector(name string, battleRatingMax int) {
 			<option value={ i }>{ fmt.Sprintf("%d.%d", 1+i/3, rem) }</option>
 		}
 	</select>
+}
+
+type AreaVehicleStat struct {
+	Vehicle string
+	Kills   int
+	Deaths  int
+}
+
+func KillDeathRatio(kills, deaths int) string {
+	if deaths == 0 {
+		return "∞"
+	}
+	return fmt.Sprintf("%.2f", float64(kills)/float64(deaths))
+}
+
+templ AreaStats(stats []AreaVehicleStat, widthMeters, heightMeters, total, limit int) {
+	<p>
+		Area { widthMeters } x { heightMeters } meters.
+		if len(stats) == 0 {
+			Nothing was killed here.
+		} else {
+			{ total } data points in the vehicles below.
+			if len(stats) == limit {
+				<br/>
+				<small>Only the { limit } most common vehicles are listed.</small>
+			}
+		}
+	</p>
+	if len(stats) > 0 {
+		<table>
+			<thead>
+				<tr>
+					<th>Vehicle</th>
+					<th>Kills</th>
+					<th>Deaths</th>
+					<th>K/D</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, v := range stats {
+					<tr>
+						<td>{ v.Vehicle }</td>
+						<td>{ v.Kills }</td>
+						<td>{ v.Deaths }</td>
+						<td>{ KillDeathRatio(v.Kills, v.Deaths) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
 }
 
 type StatsTable struct {
