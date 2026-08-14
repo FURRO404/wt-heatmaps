@@ -230,6 +230,7 @@ templ AreaStats(stats []AreaVehicleStat, widthMeters, heightMeters, total, limit
 					<th>Vehicle</th>
 					<th>Kills</th>
 					<th>Deaths</th>
+					<th>Σ</th>
 					<th>K/D</th>
 				</tr>
 			</thead>
@@ -242,6 +243,7 @@ templ AreaStats(stats []AreaVehicleStat, widthMeters, heightMeters, total, limit
 						</td>
 						<td>{ v.Kills }</td>
 						<td>{ v.Deaths }</td>
+						<td>{ v.Kills+v.Deaths }</td>
 						<td>{ KillDeathRatio(v.Kills, v.Deaths) }</td>
 					</tr>
 				}
