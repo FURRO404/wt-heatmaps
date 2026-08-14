@@ -43,6 +43,7 @@ func serveCachedMinimaps(w http.ResponseWriter, r *http.Request) {
 		resizeTo = 2048
 	default:
 		w.WriteHeader(400)
+		return
 	}
 	ret, err := tankmapsCache.Get(base64.StdEncoding.EncodeToString([]byte(r.PathValue("k"))))
 	if err != nil {

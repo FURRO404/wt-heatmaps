@@ -165,7 +165,10 @@ func serveHeat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	kq := &killstorage.QueryConditions{} //(time.Now().Add(-7*24*time.Hour), time.Now())
-	ks.QueryWithLevel(kq, level)
+	if !ks.QueryWithLevel(kq, level) {
+		w.WriteHeader(204)
+		return
+	}
 	if val := urlValueInt(q, "killerTeam"); val != nil {
 		kq.QueryWithKillerTeam(*val)
 	}

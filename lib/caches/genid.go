@@ -39,19 +39,8 @@ func (d *GenIDTwoWayMap[K, V]) GetExistingIDNOLOCK(v V) (ret K, ok bool) {
 
 func (d *GenIDTwoWayMap[K, V]) GetID(v V) (K, error) {
 	d.Lock.Lock()
-	ret, ok := d.Keys[v]
-	if ok {
-		d.Lock.Unlock()
-		return ret, nil
-	}
-	ret, err := d.Add(v)
-	if err != nil {
-		return ret, err
-	}
-	d.Keys[v] = ret
-	d.Values[ret] = v
-	d.Lock.Unlock()
-	return ret, err
+	defer d.Lock.Unlock()
+	return d.GetIDNOLOCK(v)
 }
 
 func (d *GenIDTwoWayMap[K, V]) GetIDNOLOCK(v V) (K, error) {

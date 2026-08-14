@@ -267,15 +267,16 @@ type QueryConditions struct {
 	whereArgs  []any
 }
 
-func (s *KillsStorage) QueryWithLevel(q *QueryConditions, level string) {
+func (s *KillsStorage) QueryWithLevel(q *QueryConditions, level string) bool {
 	s.lock.Lock()
 	levelID, ok := s.cLevels.GetExistingIDNOLOCK(level)
 	s.lock.Unlock()
 	if !ok {
-		return
+		return false
 	}
 	q.whereArgs = append(q.whereArgs, levelID)
 	q.whereConds = append(q.whereConds, fmt.Sprintf("level = $%d", len(q.whereArgs)))
+	return true
 }
 
 func (s *KillsStorage) QueryWithKillerVehicles(q *QueryConditions, vehicles []string) {
@@ -332,11 +333,14 @@ func (q *QueryConditions) QueryWithKillTimeMax(killTimeMax time.Duration) {
 }
 
 func (q *QueryConditions) WhereCase() string {
+	if len(q.whereConds) == 0 {
+		return ""
+	}
 	return "WHERE " + strings.Join(q.whereConds, " AND ")
 }
 
 func (q *QueryConditions) Dump() string {
-	return "WHERE " + strings.Join(q.whereConds, " AND ") + "\n" + spew.Sdump(q.whereArgs)
+	return q.WhereCase() + "\n" + spew.Sdump(q.whereArgs)
 }
 
 type KillTally struct {
@@ -367,10 +371,9 @@ GROUP BY (ROUND(p.x))::int, (ROUND(p.z))::int;`
 		return nil, err
 	}
 	// log.Info().Msg(q)
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (KillTally, error) {
-		var ret KillTally
-		row.Scan(&ret.X, &ret.Z, &ret.Score, &ret.Count)
-		return ret, err
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (ret KillTally, err error) {
+		err = row.Scan(&ret.X, &ret.Z, &ret.Score, &ret.Count)
+		return
 	})
 }
 
