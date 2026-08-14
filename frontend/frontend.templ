@@ -15,7 +15,7 @@ templ Page(content templ.Component) {
 			<script src="/static/htmx.min.js"></script>
 			// <script src="/static/htmx-ext-ws.min.js"></script>
 		</head>
-		<body>
+		<body class="mainstyle">
 			<style>
 				.title{font-weight: bold;font-size: larger;margin-right: 1em;}
 				.header > span > a {margin-right: 1em;}
@@ -70,19 +70,6 @@ templ Index(levels []LevelStat, battleRatingMax int) {
 			</svg>
 		</div>
 		<div id="settingsDiv" class="settings">
-			<p>
-				This project renders kill-death delta for each map pixel (meter) on the given
-				War Thunder ground map. Database contains only ground to ground kills and deaths, player account IDs,
-				vehicle names, weapon (ammo) used and their positions. Only from realistic battles mode.
-				<br/>
-				Blue indicates more people died there than made kills, red is reverse.
-				Logically, avoid being at blue spots and go to or check out red ones.
-				Black is used as intermediary color to show available but fair positions.
-				<br/>
-				Also clearly shows comically overpowered or absurd positions.
-				<br/>
-				Controls: drag to pan, scroll to zoom, double click to reset viewport
-			</p>
 			<p>Display settings:</p>
 			<form id="settingsForm">
 				<p>
@@ -121,18 +108,20 @@ templ Index(levels []LevelStat, battleRatingMax int) {
 					<input name="scoreIntensity" type="number" value="32" min="1" max="255"/>
 					<label for="countIntensity">Brightness</label>
 					<input name="countIntensity" type="number" value="32" min="1" max="255"/>
-					<br/>
-					<small>
-						Following multipliers directly control k/d score exposure and intensity (brightness):
-						<br/>
-						exposure being how big of a delta sways to red/green (bigger ⇒ more solid colors) and
-						<br/>
-						brightness being amount of data points available (bigger ⇒ less transparent).
-						<br/>
-						For example, 8+64 can be used to find <i>especially high</i> k/d positions while dimming down
-						floating noise whereas 64+255 will just fill the screen with the "average",
-						no matter how much data is available or how conclusive it might be.
-					</small>
+					<span>
+						<button type="button" popovertarget="helpExposureBrightness">ⓘ</button>
+					</span>
+					<div popover id="helpExposureBrightness" style="max-width: 600px" class="mainstyle">
+							Following multipliers directly control k/d score exposure and intensity (brightness):
+							<br/>
+							exposure being how big of a delta sways to red/green (bigger ⇒ more solid colors) and
+							<br/>
+							brightness being amount of data points available (bigger ⇒ less transparent).
+							<br/>
+							For example, 8+64 can be used to find <i>especially high</i> k/d positions while dimming down
+							floating noise whereas 64+255 will just fill the screen with the "average",
+							no matter how much data is available or how conclusive it might be.
+					</div>
 				</p>
 				<p>
 					<label for="killerTeam">Killer team:</label>
@@ -159,11 +148,14 @@ templ Index(levels []LevelStat, battleRatingMax int) {
 				</p>
 				<p>
 					<button type="submit" id="settingsSubmitBtn"><span style="font-size: larger;font-weight: bold;">Load</span></button>
+					<div>
+						<small>Controls: drag to pan, scroll to zoom, double click to reset viewport</small>
+					</div>
 				</p>
-			<p>
-				<div><label for="brightness">Map brightness</label></div>
-				<input id="tankmapBrightnessSlider" name="brightness" type="range" min="0" max="100" value="35"/>
-			</p>
+				<p>
+					<label for="brightness">Map brightness</label>
+					<input id="tankmapBrightnessSlider" style="max-width: 200px; vertical-align: middle;" name="brightness" type="range" min="0" max="100" value="35"/>
+				</p>
 			</form>
 		</div>
 		<div class="areastats">
@@ -175,8 +167,7 @@ templ Index(levels []LevelStat, battleRatingMax int) {
 					of every vehicle in it. The filters above apply to the box as well.
 				</small>
 			</p>
-			<div id="areaStatsResults">
-			</div>
+			<div id="areaStatsResults"></div>
 		</div>
 	</div>
 	<script type="module" src="/static/main.js"></script>
@@ -219,7 +210,14 @@ templ AreaStats(stats []AreaVehicleStat, widthMeters, heightMeters, total, limit
 		if len(stats) == 0 {
 			Nothing was killed here.
 		} else {
-			{ total } data points in the vehicles below.
+			{{
+			var globKills, globDeaths int
+			for _, v := range stats {
+				globDeaths += v.Deaths
+				globKills += v.Kills
+			}
+			}}
+			{ total } data points. Total K/D: { KillDeathRatio(globKills, globDeaths) }
 			if len(stats) == limit {
 				<br/>
 				<small>Only the { limit } most common vehicles are listed.</small>
@@ -242,7 +240,7 @@ templ AreaStats(stats []AreaVehicleStat, widthMeters, heightMeters, total, limit
 					<tr>
 						<td>
 							<img class="vehicleIcon" src={ "https://static.encyclopedia.warthunder.com/slots/" + v.Vehicle + ".png" } alt="" loading="lazy" onerror="this.remove()"/>
-							<a href={"https://wiki.warthunder.com/unit/" + v.Vehicle}>{ v.Vehicle }</a>
+							<a href={ "https://wiki.warthunder.com/unit/" + v.Vehicle }>{ v.Vehicle }</a>
 						</td>
 						<td>{ v.Kills }</td>
 						<td>{ v.Deaths }</td>

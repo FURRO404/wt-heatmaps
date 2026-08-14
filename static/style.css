@@ -1,8 +1,7 @@
-html {
+.mainstyle {
 	background-color: #111;
 	color: #ddd;
 	font-family: sans-serif;
-	height: 100%;
 }
 
 body {
@@ -47,12 +46,18 @@ body {
 
 .content > div.settings {
 	grid-area: settings;
+	border-radius: 0.8rem;
+	border: 1px solid #555;
+	padding: 0.5em;
 }
 
 .content > div.areastats {
 	grid-area: area;
 	min-width: 0;
 	overflow: auto;
+	border-radius: 0.8rem;
+	border: 1px solid #555;
+	padding: 0.5em;
 }
 
 /* the map and the settings share the top row, the table goes under both */

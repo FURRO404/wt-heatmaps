@@ -9,8 +9,20 @@ templ About() {
 			community members. Currently thunder.nanachi.party operates in close cooperation with <a href="https://wtapi.dev/">Spectra WTApi</a> project.
 		</p>
 		<p>
+			Server renders kill-death delta for each map pixel (meter) on the given
+			War Thunder ground map. Database contains only ground to ground kills and deaths, player account IDs,
+			vehicle names, weapon (ammo) used and their positions. Only from realistic battles mode.
+			<br/>
+			Blue indicates more people died there than made kills, red is reverse.
+			Logically, avoid being at blue spots and go to or check out red ones.
+			Black is used as intermediary color to show available but fair positions.
+			<br/>
+			Also clearly shows comically overpowered or absurd positions.
+			<br/>
+		</p>
+		<p>
 			Any help is appreciated, feel free to reach out with your suggestions/ideas. At the moment everything is powered
-			by Golang and PostgreSQL. Currently database stores player kills (as per kill log in-game, with position attached).
+			by Golang and PostgreSQL.
 			It allows for a lot of data rendering options and I am open for suggestions and contributions.
 			If you are web developer (primarily frontend: styling, very light plain js and htmx tech) feel free to improve
 			the website with your contributions. There are many TODOs that I am underqualified or too lazy to do.
