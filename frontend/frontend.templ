@@ -79,6 +79,7 @@ templ Index(levels []LevelStat, battleRatingMax int) {
 					<input id="settingsFormLevelInput" name="level" readonly/>
 					<div popover id="levelSelector">
 						<center><b>Select map:</b></center>
+						<input id="levelSelectorSearch" type="search" placeholder="Search maps..." autocomplete="off"/>
 						<table>
 							<thead>
 								<tr>
@@ -113,15 +114,15 @@ templ Index(levels []LevelStat, battleRatingMax int) {
 						<button type="button" popovertarget="helpExposureBrightness">ⓘ</button>
 					</span>
 					<div popover id="helpExposureBrightness" style="max-width: 600px" class="mainstyle">
-							Following multipliers directly control k/d score exposure and intensity (brightness):
-							<br/>
-							exposure being how big of a delta sways to red/green (bigger ⇒ more solid colors) and
-							<br/>
-							brightness being amount of data points available (bigger ⇒ less transparent).
-							<br/>
-							For example, 8+64 can be used to find <i>especially high</i> k/d positions while dimming down
-							floating noise whereas 64+255 will just fill the screen with the "average",
-							no matter how much data is available or how conclusive it might be.
+						Following multipliers directly control k/d score exposure and intensity (brightness):
+						<br/>
+						exposure being how big of a delta sways to red/green (bigger ⇒ more solid colors) and
+						<br/>
+						brightness being amount of data points available (bigger ⇒ less transparent).
+						<br/>
+						For example, 8+64 can be used to find <i>especially high</i> k/d positions while dimming down
+						floating noise whereas 64+255 will just fill the screen with the "average",
+						no matter how much data is available or how conclusive it might be.
 					</div>
 				</p>
 				<p>
@@ -212,11 +213,11 @@ templ AreaStats(stats []AreaVehicleStat, widthMeters, heightMeters, total, limit
 			Nothing was killed here.
 		} else {
 			{{
-			var globKills, globDeaths int
-			for _, v := range stats {
-				globDeaths += v.Deaths
-				globKills += v.Kills
-			}
+				var globKills, globDeaths int
+				for _, v := range stats {
+					globDeaths += v.Deaths
+					globKills += v.Kills
+				}
 			}}
 			{ total } data points. Average area K/D: { KillDeathRatio(globKills, globDeaths) }
 			if len(stats) == limit {

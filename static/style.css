@@ -163,6 +163,16 @@ input {
 	overflow-y: scroll;
 }
 
+/* the search box of the map selector stays above the list while it scrolls */
+#levelSelectorSearch {
+	width: 100%;
+	box-sizing: border-box;
+	margin-bottom: 0.5rem;
+	position: sticky;
+	top: 0;
+	z-index: 1;
+}
+
 .statBarGreen {
 	display: inline-block;
 	background-color: green;
