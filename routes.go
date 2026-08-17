@@ -20,6 +20,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/a-h/templ"
@@ -31,10 +32,10 @@ func makeHTTPServeMux() http.HandlerFunc {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", httpLog(handle404))
 	mux.HandleFunc("GET /static/", httpLog(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))).ServeHTTP))
-	mux.HandleFunc("GET /{$}", httpLog(compRenderFn(serveIndex)))
-	mux.HandleFunc("GET /stats", httpLog(compRenderFn(serveStats)))
+	mux.HandleFunc("GET /{$}", httpLog(ensureCached(compRenderFn(serveIndex), levelStatsSorted)))
+	mux.HandleFunc("GET /stats", httpLog(ensureCached(compRenderFn(serveStats), statsCache)))
 	mux.HandleFunc("GET /about", httpLog(compRender(frontend.Page(frontend.About()))))
-	// mux.HandleFunc("GET /waitroom/{p...}", httpLog(compRender(seveWaitroom)))
+	mux.HandleFunc("GET /waitroom/{p...}", httpLog(compRenderFn(seveWaitroom)))
 
 	mux.HandleFunc("GET /minimap/{size}/{k...}", serveCachedMinimaps)
 	mux.HandleFunc("GET /heat", httpLog(serveHeat))
@@ -48,43 +49,63 @@ func makeHTTPServeMux() http.HandlerFunc {
 	return mux.ServeHTTP
 }
 
-// func ensureCached(work http.HandlerFunc, checks ...caches.ValueCacheCommon) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		t := time.Now()
-// 		for {
-// 			ready := true
-// 			for _, c := range checks {
-// 				if !c.Ready() {
-// 					ready = false
-// 					break
-// 				}
-// 			}
-// 			if ready {
-// 				work(w, r)
-// 				return
-// 			}
-// 			time.Sleep(1 * time.Millisecond)
-// 			if time.Since(t) > 500*time.Millisecond {
-// 				w.Header().Add("Location", "/waitroom/"+url.PathEscape(r.URL.Path))
-// 				w.WriteHeader(http.StatusFound)
-// 				return
-// 			}
-// 		}
-// 	}
-// }
+var (
+	waitroomChecksMu sync.Mutex
+	waitroomChecks   = map[string][]caches.ValueCacheCommon{}
+)
 
-// func seveWaitroom(w http.ResponseWriter, r *http.Request) templ.Component {
-// 	p := r.PathValue("p")
-// 	if p == "" || p[0] != '/' {
-// 		w.Header().Add("Location", "/")
-// 		w.WriteHeader(http.StatusFound)
-// 		return nil
-// 	}
-// 	w.Header().Add("Location", p)
-// 	w.Header().Add("Retry-After", "5")
-// 	w.WriteHeader(http.StatusFound)
-// 	return frontend.Page(frontend.Waitroom())
-// }
+func ensureCached(work http.HandlerFunc, checks ...caches.ValueCacheCommon) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		waitroomChecksMu.Lock()
+		waitroomChecks[r.URL.Path] = checks
+		waitroomChecksMu.Unlock()
+		for _, c := range checks {
+			if !c.Ready() {
+				c.Refresh()
+			}
+		}
+		for _, c := range checks {
+			if !c.Ready() {
+				w.Header().Add("Location", "/waitroom/"+url.PathEscape(r.URL.Path))
+				w.WriteHeader(http.StatusFound)
+				return
+			}
+		}
+		work(w, r)
+	}
+}
+
+func seveWaitroom(w http.ResponseWriter, r *http.Request) templ.Component {
+	p := r.PathValue("p")
+	if p == "" || p[0] != '/' {
+		w.Header().Add("Location", "/")
+		w.WriteHeader(http.StatusFound)
+		return nil
+	}
+	waitroomChecksMu.Lock()
+	checks := waitroomChecks[p]
+	waitroomChecksMu.Unlock()
+	if checks == nil {
+		w.Header().Add("Location", "/")
+		w.WriteHeader(http.StatusFound)
+		return nil
+	}
+	for _, c := range checks {
+		if !c.Ready() {
+			c.Refresh()
+		}
+	}
+	for _, c := range checks {
+		if !c.Ready() {
+			w.Header().Add("Cache-Control", "no-store")
+			w.Header().Add("Refresh", "2")
+			return frontend.Page(frontend.Waitroom())
+		}
+	}
+	w.Header().Add("Location", p)
+	w.WriteHeader(http.StatusFound)
+	return nil
+}
 
 var (
 	levelByColorSorter = imagecolorsort.NewImageColorSort(func(id string) (*image.RGBA, error) {

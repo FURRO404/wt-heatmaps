@@ -70,7 +70,7 @@ func Waitroom() templ.Component {
 			templ_7745c5c3_Var2 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div><h2>Please wait</h2><p>Getting data ready for you...</p><p><small><i>This page will refresh periodically</i></small></p></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div style=\"text-align: center;\"><h2>Please wait</h2><p>Getting data ready for you...</p><p><small><i>This page will refresh periodically</i></small></p></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

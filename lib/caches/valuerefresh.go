@@ -11,6 +11,8 @@ type ValueRefresh[T any] struct {
 	refreshInterval time.Duration
 	value           T
 	getValueFn      func() T
+	refreshing      bool
+	refreshDone     chan struct{}
 }
 
 func NewValueRefresh[T any](interval time.Duration, getValueFn func() T) *ValueRefresh[T] {
@@ -22,6 +24,12 @@ func NewValueRefresh[T any](interval time.Duration, getValueFn func() T) *ValueR
 
 func (r *ValueRefresh[T]) Get() T {
 	r.lock.Lock()
+	for r.refreshing {
+		done := r.refreshDone
+		r.lock.Unlock()
+		<-done
+		r.lock.Lock()
+	}
 	defer r.lock.Unlock()
 	if time.Since(r.lastRefresh) < r.refreshInterval {
 		return r.value
@@ -46,17 +54,28 @@ func (r *ValueRefresh[T]) LastRefresh() time.Time {
 
 func (r *ValueRefresh[T]) Ready() bool {
 	r.lock.Lock()
-	ret := time.Since(r.lastRefresh)+1*time.Second < r.refreshInterval
+	ret := !r.lastRefresh.IsZero() && time.Since(r.lastRefresh)+1*time.Second < r.refreshInterval
 	r.lock.Unlock()
 	return ret
 }
 
 func (r *ValueRefresh[T]) Refresh() {
 	r.lock.Lock()
-	defer r.lock.Unlock()
-	if time.Since(r.lastRefresh) < r.refreshInterval {
+	if time.Since(r.lastRefresh) < r.refreshInterval || r.refreshing {
+		r.lock.Unlock()
 		return
 	}
-	r.value = r.getValueFn()
+	r.refreshing = true
+	done := make(chan struct{})
+	r.refreshDone = done
+	r.lock.Unlock()
+
+	v := r.getValueFn()
+
+	r.lock.Lock()
+	r.value = v
 	r.lastRefresh = time.Now()
+	r.refreshing = false
+	close(done)
+	r.lock.Unlock()
 }
