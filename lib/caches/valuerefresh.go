@@ -1,6 +1,7 @@
 package caches
 
 import (
+	"main/lib/workerpool"
 	"sync"
 	"time"
 )
@@ -10,19 +11,22 @@ type ValueRefresh[T any] struct {
 	lastRefresh     time.Time
 	refreshInterval time.Duration
 	value           T
-	getValueFn      func() T
+	valueErr        error
+	getValueFn      func() (T, error)
+	wp              *workerpool.WorkerPool
 	refreshing      bool
 	refreshDone     chan struct{}
 }
 
-func NewValueRefresh[T any](interval time.Duration, getValueFn func() T) *ValueRefresh[T] {
+func NewValueRefresh[T any](wp *workerpool.WorkerPool, interval time.Duration, getValueFn func() (T, error)) *ValueRefresh[T] {
 	return &ValueRefresh[T]{
+		wp:              wp,
 		refreshInterval: interval,
 		getValueFn:      getValueFn,
 	}
 }
 
-func (r *ValueRefresh[T]) Get() T {
+func (r *ValueRefresh[T]) Get() (T, error) {
 	r.lock.Lock()
 	for r.refreshing {
 		done := r.refreshDone
@@ -32,11 +36,11 @@ func (r *ValueRefresh[T]) Get() T {
 	}
 	defer r.lock.Unlock()
 	if time.Since(r.lastRefresh) < r.refreshInterval {
-		return r.value
+		return r.value, r.valueErr
 	}
-	r.value = r.getValueFn()
+	r.value, r.valueErr = r.getValueFn()
 	r.lastRefresh = time.Now()
-	return r.value
+	return r.value, r.valueErr
 }
 
 type ValueCacheCommon interface {
@@ -70,12 +74,18 @@ func (r *ValueRefresh[T]) Refresh() {
 	r.refreshDone = done
 	r.lock.Unlock()
 
-	v := r.getValueFn()
+	acquireValue := func() {
+		v, verr := r.getValueFn()
+		r.lock.Lock()
+		r.value = v
+		r.valueErr = verr
+		r.lastRefresh = time.Now()
+		r.refreshing = false
+		close(done)
+		r.lock.Unlock()
+	}
 
-	r.lock.Lock()
-	r.value = v
-	r.lastRefresh = time.Now()
-	r.refreshing = false
-	close(done)
-	r.lock.Unlock()
+	if !r.wp.SubmitBackground(acquireValue) {
+		acquireValue()
+	}
 }

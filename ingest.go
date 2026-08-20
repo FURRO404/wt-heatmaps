@@ -8,7 +8,6 @@ import (
 	"main/lib/ratetrack"
 	"os"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -93,22 +92,6 @@ func ingestRoutine(exitChan <-chan struct{}) {
 	close(updatePreferencesExitChan)
 
 	wg.Wait()
-
-}
-
-var (
-	levelNames = map[string]string{}
-)
-
-func initLevelNames() {
-	lnBytes, err := os.ReadFile("levelnames.json")
-	if err != nil {
-		log.Err(err).Msg("reading levelnames.json")
-	}
-	err = json.Unmarshal(lnBytes, &levelNames)
-	if err != nil {
-		log.Err(err).Msg("parsing levelnames.json")
-	}
 }
 
 func getPreferences() (ret lux.FetchPreferences, err error) {
@@ -133,20 +116,4 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 		i++
 	}
 	return
-}
-
-func levelToLocalized(n string) string {
-	k := strings.TrimPrefix(n, "levels/")
-	k = strings.TrimSuffix(k, ".bin")
-	k, isWinter := strings.CutSuffix(k, "_snow")
-	name, ok := levelNames["location/"+k]
-	if !ok {
-		log.Warn().Str("level", n).Str("k", k).Msg("unmatched locale name")
-		return n
-	}
-	name = strings.TrimSuffix(name, " - tank battle")
-	if isWinter {
-		name += " (winter)"
-	}
-	return name
 }

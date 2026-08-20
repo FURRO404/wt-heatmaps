@@ -4,16 +4,20 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"image"
 	"image/png"
 	"io"
+	"main/lib/caches"
 	"net/http"
 	"strings"
 
 	"golang.org/x/image/draw"
 )
 
-func fetchTankmap(kb64 string) ([]byte, error) {
+var cachedTankmaps = noerr(caches.NewFetchFileCache(cfg.GetDString("./cache/tankmaps/", "cacheTankmaps"), tankmapFetchB64LEV))
+
+func tankmapFetchB64LEV(kb64 string) ([]byte, error) {
 	kb, err := base64.StdEncoding.DecodeString(kb64)
 	if err != nil {
 		return nil, err
@@ -34,6 +38,27 @@ func fetchTankmap(kb64 string) ([]byte, error) {
 	return ret, err
 }
 
+func tankmapFromCache(id string) (*image.RGBA, error) {
+	ret, err := cachedTankmaps.Get(base64.StdEncoding.EncodeToString([]byte(id)))
+	if err != nil {
+		return nil, err
+	}
+	im, err := png.Decode(bytes.NewReader(ret))
+	imRGBA, ok := im.(*image.RGBA)
+	if !ok {
+		imNRGBA, ok := im.(*image.NRGBA)
+		if !ok {
+			return nil, fmt.Errorf("not rgba or nrgba from tankmap cache: %T", im)
+		}
+		imRGBA = &image.RGBA{
+			Pix:    imNRGBA.Pix,
+			Stride: imNRGBA.Stride,
+			Rect:   imNRGBA.Rect,
+		}
+	}
+	return imRGBA, nil
+}
+
 func serveCachedMinimaps(w http.ResponseWriter, r *http.Request) {
 	resizeTo := 0
 	switch r.PathValue("size") {
@@ -45,7 +70,7 @@ func serveCachedMinimaps(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(400)
 		return
 	}
-	ret, err := tankmapsCache.Get(base64.StdEncoding.EncodeToString([]byte(r.PathValue("k"))))
+	ret, err := cachedTankmaps.Get(base64.StdEncoding.EncodeToString([]byte(r.PathValue("k"))))
 	if err != nil {
 		w.WriteHeader(500)
 		w.Write([]byte(err.Error()))

@@ -14,7 +14,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func collectStatsTables() []frontend.StatsTable {
+var cachedStatsTables = caches.NewValueRefresh(wb, 10*time.Minute, collectStatsTables)
+
+func collectStatsTables() ([]frontend.StatsTable, error) {
 	ret := []frontend.StatsTable{}
 	byLevel, err := ks.GetAmountsByLevel(context.Background())
 	if err != nil {
@@ -61,15 +63,11 @@ func collectStatsTables() []frontend.StatsTable {
 		ColumnLabels: []string{"Time (UTC)", "Count", ""},
 		Rows:         byDayRows,
 	})
-	return ret
+	return ret, nil
 }
 
-var (
-	statsCache = caches.NewValueRefresh(10*time.Minute, collectStatsTables)
-)
-
 func serveStats(_ http.ResponseWriter, _ *http.Request) templ.Component {
-	tables := statsCache.Get()
-	updatedAt := statsCache.LastRefresh()
+	tables, _ := cachedStatsTables.Get()
+	updatedAt := cachedStatsTables.LastRefresh()
 	return frontend.Page(frontend.Stats(tables, updatedAt, int(ingestStatSessionRate5m.Load()), int(ingestStatKillsRate5m.Load())))
 }

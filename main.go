@@ -6,8 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"main/lib/caches"
 	"main/lib/killstorage"
+	"main/lib/workerpool"
 	"os"
 	"os/signal"
 
@@ -19,10 +19,10 @@ import (
 )
 
 var (
-	flConfigPath  = flag.String("config", "config.json", "path to config json")
-	cfg           lac.Conf
-	ks            *killstorage.KillsStorage
-	tankmapsCache *caches.FetchFileCache
+	flConfigPath = flag.String("config", "config.json", "path to config json")
+	cfg          lac.Conf
+	ks           *killstorage.KillsStorage
+	wb           *workerpool.WorkerPool
 )
 
 func main() {
@@ -38,16 +38,12 @@ func main() {
 
 	var err error
 
+	wb = workerpool.NewWorkerPool(2)
+
 	log.Info().Msg("connecting to database")
 	ks, err = killstorage.NewKillsStorage(cfg.GetDString(`database=thunder user=thunder password=warthunder_analytics_or_something`, "db"))
 	if err != nil {
 		log.Fatal().Err(err).Msg("db connect")
-	}
-
-	log.Info().Msg("opening tankmaps cache")
-	tankmapsCache, err = caches.NewFetchFileCache(cfg.GetDString("./cache/tankmaps/", "cacheTankmaps"), fetchTankmap)
-	if err != nil {
-		log.Fatal().Err(err).Msg("tankmaps cache init")
 	}
 
 	log.Info().Msg("loading wpcost")
@@ -66,7 +62,7 @@ func main() {
 	stopIngest := goflexutils.StartBackgroundRoutine(log.Logger, "ingest", ingestRoutine)
 
 	go reportCall(func() { levelStatsSorted.Refresh() }, "warming level sorting cache")
-	go reportCall(func() { statsCache.Refresh() }, "warming stat tables cache")
+	go reportCall(func() { cachedStatsTables.Refresh() }, "warming stat tables cache")
 
 	log.Info().Msg("init done")
 	<-ctx.Done()

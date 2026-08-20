@@ -1,18 +1,12 @@
 package main
 
 import (
-	"bytes"
-	"context"
-	"encoding/base64"
 	"fmt"
 	"image"
 	"image/color"
-	"image/png"
 	"main/frontend"
 	"main/lib/caches"
-	"main/lib/imagecolorsort"
 	"main/lib/killstorage"
-	"main/lib/levelcoords"
 	"maps"
 	"math"
 	"net/http"
@@ -33,7 +27,7 @@ func makeHTTPServeMux() http.HandlerFunc {
 	mux.HandleFunc("GET /", httpLog(handle404))
 	mux.HandleFunc("GET /static/", httpLog(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))).ServeHTTP))
 	mux.HandleFunc("GET /{$}", httpLog(ensureCached(compRenderFn(serveIndex), levelStatsSorted)))
-	mux.HandleFunc("GET /stats", httpLog(ensureCached(compRenderFn(serveStats), statsCache)))
+	mux.HandleFunc("GET /stats", httpLog(ensureCached(compRenderFn(serveStats), cachedStatsTables)))
 	mux.HandleFunc("GET /about", httpLog(compRender(frontend.Page(frontend.About()))))
 	mux.HandleFunc("GET /waitroom/{p...}", httpLog(compRenderFn(seveWaitroom)))
 
@@ -85,93 +79,28 @@ func seveWaitroom(w http.ResponseWriter, r *http.Request) templ.Component {
 	waitroomChecksMu.Lock()
 	checks := waitroomChecks[p]
 	waitroomChecksMu.Unlock()
-	if checks == nil {
-		w.Header().Add("Location", "/")
-		w.WriteHeader(http.StatusFound)
-		return nil
-	}
+	isReady := true
 	for _, c := range checks {
 		if !c.Ready() {
 			c.Refresh()
+			isReady = false
 		}
 	}
-	for _, c := range checks {
-		if !c.Ready() {
-			w.Header().Add("Cache-Control", "no-store")
-			w.Header().Add("Refresh", "2")
-			return frontend.Page(frontend.Waitroom())
-		}
+	if isReady {
+		w.Header().Add("Location", p)
+		w.WriteHeader(http.StatusFound)
+		return nil
 	}
-	w.Header().Add("Location", p)
-	w.WriteHeader(http.StatusFound)
-	return nil
+	w.Header().Add("Cache-Control", "no-store")
+	w.Header().Add("Refresh", "2")
+	return frontend.Page(frontend.Waitroom())
 }
 
-var (
-	levelByColorSorter = imagecolorsort.NewImageColorSort(func(id string) (*image.RGBA, error) {
-		ret, err := tankmapsCache.Get(base64.StdEncoding.EncodeToString([]byte(id)))
-		if err != nil {
-			return nil, err
-		}
-		im, err := png.Decode(bytes.NewReader(ret))
-		imRGBA, ok := im.(*image.RGBA)
-		if !ok {
-			imNRGBA, ok := im.(*image.NRGBA)
-			if !ok {
-				return nil, fmt.Errorf("not rgba or nrgba from tankmap cache: %T", im)
-			}
-			imRGBA = &image.RGBA{
-				Pix:    imNRGBA.Pix,
-				Stride: imNRGBA.Stride,
-				Rect:   imNRGBA.Rect,
-			}
-		}
-		// log.Info().Str("id", id).Msg("colorguessing")
-		return imRGBA, nil
-	})
-	levelAmountsCache = caches.NewValueRefresh(6*time.Hour, func() []killstorage.AmountsByLevelRow {
-		ret, err := ks.GetAmountsByLevel(context.Background())
-		if err != nil {
-			log.Err(err).Msg("get amounts by level")
-			ret = []killstorage.AmountsByLevelRow{}
-		}
-		return ret
-	})
-	levelStatsSorted = caches.NewValueRefresh(6*time.Hour, getSortedLevelStats)
-)
-
 func serveIndex(w http.ResponseWriter, r *http.Request) templ.Component {
-	levels := levelStatsSorted.Get()
+	levels, _ := levelStatsSorted.Get()
 	vehicles := slices.Collect(maps.Values(ks.GetDictVehicles()))
 	slices.Sort(vehicles)
 	return frontend.Page(frontend.Index(levels, battleRatingGetter.GetRankMax()))
-}
-
-func getSortedLevelStats() []frontend.LevelStat {
-	levelAmounts := levelAmountsCache.Get()
-	levelNames := make([]string, len(levelAmounts))
-	for i, v := range levelAmounts {
-		levelNames[i] = v.LevelName
-	}
-	err := levelByColorSorter.Sort(levelNames)
-	if err != nil {
-		log.Err(err).Msg("sort")
-	}
-	levels := make([]frontend.LevelStat, 0, len(levelAmounts))
-	for _, levelName := range levelNames {
-		levels = append(levels, frontend.LevelStat{
-			Level:        levelName,
-			LevelDisplay: levelToLocalized(levelName),
-			Samples: levelAmounts[slices.IndexFunc(levelAmounts, func(val killstorage.AmountsByLevelRow) bool {
-				return val.LevelName == levelName
-			})].Count,
-		})
-	}
-	return levels
-}
-
-func getLevelOffsets(level string) (levelcoords.LevelCoords, error) {
-	return levelcoords.GetLevelCoordsCached(cfg.GetDString("cache/offsets.json", "cacheOffsets"), level)
 }
 
 func serveHeat(w http.ResponseWriter, r *http.Request) {
