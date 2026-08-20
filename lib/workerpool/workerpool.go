@@ -3,9 +3,9 @@ package workerpool
 import "sync"
 
 type WorkerPool struct {
-	lock       sync.Mutex
+	lock       *sync.Mutex
 	numRunners int
-	wg         sync.WaitGroup
+	wg         *sync.WaitGroup
 	isClosed   bool
 	tasks      chan func()
 }
@@ -14,6 +14,8 @@ func NewWorkerPool(numRunners int) *WorkerPool {
 	ret := &WorkerPool{
 		numRunners: numRunners,
 		tasks:      make(chan func(), 16),
+		wg:         &sync.WaitGroup{},
+		lock:       &sync.Mutex{},
 	}
 	for range numRunners {
 		ret.wg.Go(ret.runner)

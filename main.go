@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"main/lib/caches"
 	"main/lib/killstorage"
 	"main/lib/workerpool"
 	"os"
@@ -22,7 +23,7 @@ var (
 	flConfigPath = flag.String("config", "config.json", "path to config json")
 	cfg          lac.Conf
 	ks           *killstorage.KillsStorage
-	wb           *workerpool.WorkerPool
+	wb           = workerpool.NewWorkerPool(2)
 )
 
 func main() {
@@ -36,9 +37,9 @@ func main() {
 		}))
 	log.Info().Msg("hello world")
 
-	var err error
+	cachedTankmaps = noerr(caches.NewFetchFileCache(cfg.GetDString("./cache/tankmaps/", "cacheTankmaps"), tankmapFetchB64LEV))
 
-	wb = workerpool.NewWorkerPool(2)
+	var err error
 
 	log.Info().Msg("connecting to database")
 	ks, err = killstorage.NewKillsStorage(cfg.GetDString(`database=thunder user=thunder password=warthunder_analytics_or_something`, "db"))

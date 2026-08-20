@@ -15,7 +15,7 @@ import (
 	"golang.org/x/image/draw"
 )
 
-var cachedTankmaps = noerr(caches.NewFetchFileCache(cfg.GetDString("./cache/tankmaps/", "cacheTankmaps"), tankmapFetchB64LEV))
+var cachedTankmaps *caches.FetchFileCache
 
 func tankmapFetchB64LEV(kb64 string) ([]byte, error) {
 	kb, err := base64.StdEncoding.DecodeString(kb64)

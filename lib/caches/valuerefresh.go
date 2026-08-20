@@ -26,6 +26,7 @@ func NewValueRefresh[T any](wp *workerpool.WorkerPool, interval time.Duration, g
 	}
 }
 
+// blocks until gets refreshed value
 func (r *ValueRefresh[T]) Get() (T, error) {
 	r.lock.Lock()
 	for r.refreshing {
@@ -34,13 +35,17 @@ func (r *ValueRefresh[T]) Get() (T, error) {
 		<-done
 		r.lock.Lock()
 	}
-	defer r.lock.Unlock()
 	if time.Since(r.lastRefresh) < r.refreshInterval {
-		return r.value, r.valueErr
+		retval, reterr := r.value, r.valueErr
+		r.lock.Unlock()
+		return retval, reterr
 	}
-	r.value, r.valueErr = r.getValueFn()
-	r.lastRefresh = time.Now()
-	return r.value, r.valueErr
+
+	r.acquireValue()
+
+	retval, reterr := r.value, r.valueErr
+	r.lock.Unlock()
+	return retval, reterr
 }
 
 type ValueCacheCommon interface {
@@ -63,29 +68,36 @@ func (r *ValueRefresh[T]) Ready() bool {
 	return ret
 }
 
+// assumes lock is initially locked, will unlock while refreshing and keep locked once done
+func (r *ValueRefresh[T]) acquireValue() {
+	r.refreshing = true
+	r.refreshDone = make(chan struct{})
+	r.lock.Unlock()
+
+	v, verr := r.getValueFn()
+
+	r.lock.Lock()
+	r.value = v
+	r.valueErr = verr
+	r.lastRefresh = time.Now()
+	r.refreshing = false
+	if r.refreshDone != nil {
+		close(r.refreshDone)
+	}
+}
+
+// blocks only if worker pool is disfunctional
 func (r *ValueRefresh[T]) Refresh() {
 	r.lock.Lock()
 	if time.Since(r.lastRefresh) < r.refreshInterval || r.refreshing {
 		r.lock.Unlock()
 		return
 	}
-	r.refreshing = true
-	done := make(chan struct{})
-	r.refreshDone = done
-	r.lock.Unlock()
-
-	acquireValue := func() {
-		v, verr := r.getValueFn()
-		r.lock.Lock()
-		r.value = v
-		r.valueErr = verr
-		r.lastRefresh = time.Now()
-		r.refreshing = false
-		close(done)
+	if !r.wp.SubmitBackground(func() {
+		r.acquireValue()
 		r.lock.Unlock()
-	}
-
-	if !r.wp.SubmitBackground(acquireValue) {
-		acquireValue()
+	}) {
+		r.acquireValue()
+		r.lock.Unlock()
 	}
 }

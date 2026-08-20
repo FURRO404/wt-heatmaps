@@ -273,7 +273,7 @@ templ Stats(stats []StatsTable, updatedAt time.Time, ingestStatSessionRate5m, in
 	</style>
 	<div style="text-align: center;">
 		Updated at: { updatedAt.Format(time.DateTime) }
-		({ time.Since(updatedAt).Round(time.Minute).String() } ago)
+		({ time.Since(updatedAt).Round(time.Second).String() } ago)
 		Ingest rate: { ingestStatSessionRate5m } sessions { ingestStatKillsRate5m } kills per 5 minutes
 	</div>
 	<div class="stats">
