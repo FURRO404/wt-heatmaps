@@ -21,7 +21,7 @@ var (
 )
 
 func ingestRoutine(exitChan <-chan struct{}) {
-	luxToken, haveLuxToken := cfg.GetString("luxToken")
+	luxToken, haveLuxToken := cfg.GetString("lux", "token")
 	if !haveLuxToken {
 		return
 	}
@@ -106,7 +106,7 @@ func getPreferences() (ret lux.FetchPreferences, err error) {
 	}
 	i := 0
 	for _, v := range slices.Backward(amounts) {
-		if i >= 20 {
+		if i >= cfg.GetDInt(20, "lux", "fetchMapsCount") {
 			break
 		}
 		if v.LevelName == "levels/avg_nuclear_incident.bin" {
