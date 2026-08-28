@@ -202,7 +202,7 @@ func buildKillQuery(q url.Values, level string) (*killstorage.QueryConditions, b
 	return kq, true
 }
 
-const areaStatsLimit = 50
+const areaStatsLimit = 25
 
 func serveAreaStats(w http.ResponseWriter, r *http.Request) templ.Component {
 	q := r.URL.Query()
@@ -279,9 +279,7 @@ func serveRegion(w http.ResponseWriter, r *http.Request) {
 	}
 	kq.QueryWithArea(x0, z0, x1, z1)
 
-	// No limit. areaStatsLimit caps the rows the page draws, and nothing draws
-	// this answer.
-	stats, err := ks.GetVehicleStatsByArea(r.Context(), kq, 0)
+	stats, err := ks.GetVehicleStatsByArea(r.Context(), kq, areaStatsLimit)
 	if err != nil {
 		log.Err(err).Msg("get vehicle stats by area")
 		w.WriteHeader(500)
