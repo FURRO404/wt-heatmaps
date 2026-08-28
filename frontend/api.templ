@@ -1,0 +1,59 @@
+package frontend
+
+templ API() {
+	<div style="max-width: 700px;margin-left: auto; margin-right: auto;">
+		<p>
+			This page describes the public HTTP API of War Thunder Heatmaps. The API is free.
+			It needs no key and no account. Please keep your request rate low and set a
+			User-Agent header that says who you are, so I can contact you if your client
+			causes trouble. There is no rate limit at this time. If the API gets abused,
+			a per-IP rate limit will be added and this page will say so.
+		</p>
+		<h3>GET /api/v1/region</h3>
+		<p>
+			Returns kill and death counts for each vehicle in a box of one map.
+			The box is given as fractions of the tank map, from 0 to 1.
+			<code>u</code> is the horizontal axis and <code>v</code> is the vertical axis.
+			The two corners must differ on both axes.
+		</p>
+		<p>
+			Query parameters:
+			<ul>
+				<li><code>level</code> (needed) map file name, for example <code>levels/avg_abandoned_town.bin</code>. The map selector on the main page uses the same values.</li>
+				<li><code>u0</code>, <code>v0</code>, <code>u1</code>, <code>v1</code> (needed) the two corners of the box</li>
+				<li><code>killerTeam</code> team number of the killer</li>
+				<li><code>killTimeMin</code>, <code>killTimeMax</code> time of the kill in the battle, in seconds</li>
+				<li><code>killerBattleRatingMin</code>, <code>killerBattleRatingMax</code> battle rating range of the killer vehicle, multiplied by 10 (7.7 is 77)</li>
+				<li><code>victimBattleRatingMin</code>, <code>victimBattleRatingMax</code> the same for the victim vehicle</li>
+			</ul>
+		</p>
+		<p>
+			The answer is a JSON array. Each element has these fields:
+			<ul>
+				<li><code>vehicle</code> internal vehicle name</li>
+				<li><code>kills</code> number of kills made by that vehicle in the box</li>
+				<li><code>deaths</code> number of deaths of that vehicle in the box</li>
+			</ul>
+			An empty box gives an empty array. There is no row limit.
+		</p>
+		<p>
+			Status codes:
+			<ul>
+				<li><code>200</code> the answer is in the body</li>
+				<li><code>204</code> the map is not known</li>
+				<li><code>400</code> a needed parameter is missing or malformed</li>
+				<li><code>500</code> the server failed, see the response of the server operator</li>
+			</ul>
+		</p>
+		<p>
+			Example:
+			<br/>
+			<code>curl 'https://thunder.nanachi.party/api/v1/region?level=levels/avg_abandoned_town.bin&amp;u0=0.1&amp;v0=0.1&amp;u1=0.4&amp;v1=0.4'</code>
+		</p>
+		<p>
+			The data covers ground to ground kills in realistic battles only.
+			If you want another view of the data, or images, read the
+			<a href="/about">About</a> page and contact me.
+		</p>
+	</div>
+}
