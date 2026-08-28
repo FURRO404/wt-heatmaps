@@ -406,8 +406,10 @@ CROSS JOIN LATERAL (
 JOIN vehicle_names n ON n.id = p.vehicle
 ` + conds.WhereCase() + `
 GROUP BY n.name
-ORDER BY COUNT(*) DESC
-LIMIT ` + strconv.Itoa(limit) + `;`
+ORDER BY COUNT(*) DESC`
+	if limit > 0 {
+		q += ` LIMIT ` + strconv.Itoa(limit) + `;`
+	}
 	rows, err := s.db.Query(ctx, q, conds.whereArgs...)
 	if err != nil {
 		return nil, err
