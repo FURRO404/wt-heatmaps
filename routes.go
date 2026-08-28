@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -34,6 +35,7 @@ func makeHTTPServeMux() http.HandlerFunc {
 	mux.HandleFunc("GET /minimap/{size}/{k...}", serveCachedMinimaps)
 	mux.HandleFunc("GET /heat", httpLog(serveHeat))
 	mux.HandleFunc("GET /areastats", httpLog(compRenderFn(serveAreaStats)))
+	mux.HandleFunc("GET /api/v1/region", httpLog(serveRegion))
 
 	mux.HandleFunc("GET /missions...", httpLog(servePermaRedirect("/")))
 	mux.HandleFunc("GET /clans...", httpLog(servePermaRedirect("/")))
@@ -243,6 +245,63 @@ func serveAreaStats(w http.ResponseWriter, r *http.Request) templ.Component {
 		total += v.Kills + v.Deaths
 	}
 	return frontend.AreaStats(rows, int(math.Round(math.Abs(x1-x0))), int(math.Round(math.Abs(z1-z0))), total, areaStatsLimit)
+}
+
+type RegionVehicleStat struct {
+	Vehicle string `json:"vehicle"`
+	Kills   int    `json:"kills"`
+	Deaths  int    `json:"deaths"`
+}
+
+// serveRegion answers the same question as serveAreaStats, in JSON.
+func serveRegion(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	level := q.Get("level")
+	box, ok := areaBoxFromQuery(q)
+	if level == "" || !ok {
+		w.WriteHeader(400)
+		return
+	}
+
+	levelOffsets, err := getLevelOffsets(level)
+	if err != nil {
+		log.Err(err).Msg("get level offsets")
+		w.WriteHeader(500)
+		return
+	}
+	x0, z0, x1, z1 := levelOffsets.TankMapAreaToWorld(box)
+
+	kq, ok := buildKillQuery(q, level)
+	if !ok {
+		w.WriteHeader(204)
+		return
+	}
+	kq.QueryWithArea(x0, z0, x1, z1)
+
+	// No limit. areaStatsLimit caps the rows the page draws, and nothing draws
+	// this answer.
+	stats, err := ks.GetVehicleStatsByArea(r.Context(), kq, 0)
+	if err != nil {
+		log.Err(err).Msg("get vehicle stats by area")
+		w.WriteHeader(500)
+		return
+	}
+
+	// Made with a length, so an empty box encodes as [] and not as null.
+	rows := make([]RegionVehicleStat, len(stats))
+	for i, v := range stats {
+		rows[i] = RegionVehicleStat{
+			Vehicle: strings.TrimPrefix(v.Vehicle, "tankmodels/"),
+			Kills:   v.Kills,
+			Deaths:  v.Deaths,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(rows)
+	if err != nil {
+		log.Err(err).Msg("write region response")
+	}
 }
 
 func areaBoxFromQuery(vals url.Values) (box [4]float64, ok bool) {
