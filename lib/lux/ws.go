@@ -162,7 +162,25 @@ func dialLux(log zerolog.Logger, token string) (*websocket.Conn, error) {
 	}
 	log.Info().Msg("lux connected")
 	wsConn.SetDeadline(time.Now().Add(5 * time.Second))
+	// ws, err := websocket.NewClient(wsConfig, &wsInspectRWC{conn: wsConn})
 	ws, err := websocket.NewClient(wsConfig, wsConn)
 	wsConn.SetDeadline(time.Time{})
 	return ws, err
+}
+
+type wsInspectRWC struct {
+	conn io.ReadWriteCloser
+}
+
+func (ins *wsInspectRWC) Read(p []byte) (n int, err error) {
+	n, err = ins.conn.Read(p)
+	log.Err(err).Str("v", strings.Trim(string(p), "\x00")).Msg("inspect read")
+	return
+}
+func (ins *wsInspectRWC) Write(p []byte) (n int, err error) {
+	log.Err(err).Str("v", strings.Trim(string(p), "\x00")).Msg("inspect write")
+	return ins.conn.Write(p)
+}
+func (ins *wsInspectRWC) Close() error {
+	return ins.conn.Close()
 }
