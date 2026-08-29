@@ -13,6 +13,7 @@ require (
 	github.com/shamaton/msgpack/v3 v3.2.0
 	golang.org/x/image v0.45.0
 	golang.org/x/net v0.58.0
+	google.golang.org/protobuf v1.36.12
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 

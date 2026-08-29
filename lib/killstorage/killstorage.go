@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"main/lib/caches"
-	"main/lib/lux"
+	"main/lib/lux/luxproto/luxprotogen"
 	"maps"
 	"os"
 	"slices"
@@ -478,16 +478,22 @@ func (s *KillsStorage) Close() {
 	s.db.Close()
 }
 
-func LuxCarveToKills(carve *lux.LuxCarve) (ret []Kill, err error) {
+func LuxCarveToKills(carve *luxprotogen.Replay) (ret []Kill, err error) {
 	ret = []Kill{}
 	if carve == nil {
 		return
 	}
-	sessionID, err := strconv.ParseUint(carve.SessionID, 10, 64)
-	if err != nil {
-		return ret, fmt.Errorf("parsing session id number string %q: %w", carve.SessionID, err)
+	if carve.Light == nil {
+		return ret, errors.New("carve.Light is nill")
 	}
-	for _, kill := range carve.Events.Kills {
+	sessionID, err := strconv.ParseUint(carve.Light.Id, 10, 64)
+	if err != nil {
+		return ret, fmt.Errorf("parsing session id number string %q: %w", carve.Light.Id, err)
+	}
+	for _, kill := range carve.Kills {
+		if kill == nil {
+			continue
+		}
 		if kill.OffendedUid == "0" {
 			continue
 		}
@@ -511,43 +517,47 @@ func LuxCarveToKills(carve *lux.LuxCarve) (ret []Kill, err error) {
 		if len(kill.OffenderPos) != 3 {
 			return ret, fmt.Errorf("offender pos is not 3 elements: %v", kill.OffenderPos)
 		}
-		killer, ok := carve.Players[kill.OffenderUid]
-		if !ok {
-			return ret, fmt.Errorf("killer was not found (%q)", kill.OffenderUid)
-		}
-		killerTeam, err := strconv.ParseUint(killer.Team, 10, 64)
+		killerTeam, err := luxCarveToKillsGetPlayerTeam(carve.Light.Players, kill.OffenderUid)
 		if err != nil {
-			return ret, fmt.Errorf("parsing killer team string %q: %w", killer.Team, err)
+			return ret, err
 		}
-		victim, ok := carve.Players[kill.OffendedUid]
-		if !ok {
-			return ret, fmt.Errorf("victim was not found (%q)", kill.OffendedUid)
-		}
-		victimTeam, err := strconv.ParseUint(victim.Team, 10, 64)
+		victimTeam, err := luxCarveToKillsGetPlayerTeam(carve.Light.Players, kill.OffendedUid)
 		if err != nil {
-			return ret, fmt.Errorf("parsing victim team string %q: %w", victim.Team, err)
+			return ret, err
 		}
 		if killerTeam > 2 || victimTeam > 2 {
 			return ret, fmt.Errorf("victim or killer team oob %d %d", killerTeam, victimTeam)
 		}
 		ret = append(ret, Kill{
 			Session:       sessionID,
-			SessionTime:   carve.StartTime,
+			SessionTime:   uint64(carve.Light.StartTs),
 			KillTime:      uint64(kill.Time),
-			Level:         carve.Level,
-			Mission:       carve.Mission,
+			Level:         carve.Light.LevelPath,
+			Mission:       carve.Light.MissionPath,
 			KillerID:      killerID,
 			KillerTeam:    byte(killerTeam),
-			KillerVehicle: strings.ToLower(kill.OffenderUnit),
-			KillerPosX:    float64(kill.OffenderPos[0]) / 16,
-			KillerPosZ:    float64(kill.OffenderPos[2]) / 16,
-			Weapon:        kill.Weapon,
+			KillerVehicle: strings.ToLower(kill.OffenderUnitId),
+			KillerPosX:    float64(kill.OffenderPos[0]) / float64(carve.PosQuant),
+			KillerPosZ:    float64(kill.OffenderPos[2]) / float64(carve.PosQuant),
+			Weapon:        kill.UsedWeaponId,
 			VictimID:      victimID,
 			VictimTeam:    byte(victimTeam),
-			VictimVehicle: strings.ToLower(kill.OffendedUnit),
-			VictimPosX:    float64(kill.OffendedPos[0]) / 16,
-			VictimPosZ:    float64(kill.OffendedPos[2]) / 16,
+			VictimVehicle: strings.ToLower(kill.OffendedUnitId),
+			VictimPosX:    float64(kill.OffendedPos[0]) / float64(carve.PosQuant),
+			VictimPosZ:    float64(kill.OffendedPos[2]) / float64(carve.PosQuant),
 		})
 	}
 	return
+}
+
+func luxCarveToKillsGetPlayerTeam(players []*luxprotogen.Player, uid string) (int, error) {
+	for _, p := range players {
+		if p == nil {
+			continue
+		}
+		if p.Uid == uid {
+			return int(p.Team), nil
+		}
+	}
+	return 0, fmt.Errorf("player was not found (%q)", uid)
 }

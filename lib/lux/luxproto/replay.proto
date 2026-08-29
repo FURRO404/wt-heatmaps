@@ -1,0 +1,271 @@
+syntax = "proto3";
+
+package wt.v1;
+
+option go_package = "./luxprotogen";
+
+// War Thunder replay schema, version 1. Published at /schemas/v1/replay.proto.
+// Each version lives in its own directory and never changes once published.
+//
+// Two messages describe one battle:
+//   LightReplay — the header: battle metadata and scoreboard.
+//   Replay      — the full object: the header plus every heavy section (chat, events,
+//                 trajectories). Both are carried in Envelope.body.
+//
+// Fields that classify a value — difficulty, chat/damage/projectile type — are plain
+// strings (open sets). Enums may be introduced in a later schema version.
+//
+// Decoding channels:
+//   every repeated numeric channel is delta encoded from zero, so the absolute
+//   value is a cumulative sum of the elements;
+//   positions are then divided by pos_quant to get metres, angles by ang_quant to
+//   get radians, times are milliseconds from the start of the battle;
+//   fields named *_t are time axes. A message may carry several of them, and they
+//   are independent: channels of different groups line up by time, not by index.
+
+// Wrapper every serialized replay travels in. Frozen: identical in every schema version,
+// so the version and body kind can always be read before the body is decoded.
+message Envelope {
+  uint32 schema_version = 1;  // Schema version the body was written with.
+  string kind           = 2;  // Body message type: "full" (Replay) | "light" (LightReplay).
+  bytes  body           = 3;  // Serialized body of that version, of the type named by kind.
+}
+
+// The replay header.
+message LightReplay {
+  string id           = 1;   // Replay identifier, unique per battle.
+  string type         = 2;   // Battle type: sqb | tss | random.
+  string mission_mode = 3;   // Game mode, e.g. Domination.
+  string mission_name = 4;   // Map name, e.g. Vietnam.
+  uint32 start_ts     = 5;   // Battle start, unix seconds.
+  uint32 end_ts       = 6;   // Battle end, unix seconds.
+  uint32 duration     = 7;   // Seconds played.
+  string level_path   = 8;   // Map file path.
+  string mission_path = 9;   // Mission file path.
+  string difficulty   = 10;  // arcade | realistic | hardcore.
+  string cluster      = 11;  // Server cluster: CIS | EU | NA | SA.
+
+  bool   draw        = 12;  // True when the battle ended in a draw.
+  uint32 winner_team = 13;  // Winning team number, 1 or 2. Zero on a draw.
+  uint32 loser_team  = 14;  // Losing team number, 1 or 2. Zero on a draw.
+  // Squadron tags of the two teams. Present only in squadron battles, where a team is
+  // one squadron; in other modes every player carries their own tag instead. On a draw,
+  // team 1's tag is in winner_tag and team 2's in loser_tag.
+  optional string winner_tag = 15;
+  optional string loser_tag  = 16;
+
+  repeated ClanElo clan_elo = 17;  // Squadron points for the battle, one entry per squadron.
+
+  // Processing metadata.
+  string status = 18;  // pending | in_progress | completed | failed.
+  uint32 ttp    = 19;  // Seconds spent processing.
+  int32  delay  = 20;  // Seconds between the battle ending and it being processed.
+  string detail = 21;  // Failure reason: "Downloading error" | "Parsing error". failed only.
+
+  Tss tss = 22;  // Tournament data. tss battles only.
+
+  repeated Player players = 23;  // Scoreboard, one entry per player.
+}
+
+// One battle in full: the header plus every heavy section.
+message Replay {
+  LightReplay light = 1;  // The header.
+
+  uint32 pos_quant = 2;  // Divisor for every position channel: value / pos_quant = metres.
+  uint32 ang_quant = 3;  // Divisor for every angle channel: value / ang_quant = radians.
+
+  repeated ChatLine     chat          = 4;   // Chat messages, in order.
+  repeated Kill         kills         = 5;
+  repeated Damage       damage        = 6;
+  repeated Award        awards        = 7;
+  repeated Interception interceptions = 8;
+  repeated Entity       entities      = 9;   // Unit trajectories, one entry per spawned vehicle.
+  repeated Projectile   projectiles   = 10;  // Bomb and rocket trajectories.
+  repeated Zone         zones         = 11;  // Capture zones.
+  Tickets               tickets       = 12;  // Ticket history of both teams.
+}
+
+message Tss {
+  uint32  tournament_id   = 1;
+  string  tournament_name = 2;
+  string  match_id        = 3;
+  string  bracket         = 4;  // Bracket type, e.g. swiss.
+  TssTeam team1           = 5;  // First team of the match.
+  TssTeam team2           = 6;  // Second team of the match.
+}
+
+message TssTeam {
+  string             team_id    = 1;
+  string             team_name  = 2;
+  string             captain_id = 3;  // uid of the team captain.
+  repeated TssPlayer players    = 4;  // Team roster.
+}
+
+message TssPlayer {
+  string uid       = 1;
+  string role      = 2;  // Role in the team.
+  string pvp_ratio = 3;
+}
+
+message Player {
+  uint32 pid                 = 1;   // Row index in the scoreboard.
+  string uid                 = 2;   // War Thunder user id.
+  string name                = 3;   // Player nickname.
+  string tag                 = 4;   // Squadron tag; the team number when unknown in a squadron battle.
+  uint32 team                = 5;   // Team number, 1 or 2.
+  string country             = 6;   // Nation the player fought for, e.g. usa.
+  uint32 air_kills           = 7;
+  uint32 ground_kills        = 8;
+  uint32 assists             = 9;
+  uint32 deaths              = 10;
+  uint32 captures            = 11;  // Zones captured.
+  uint32 score               = 12;
+  uint32 missile_evades      = 13;
+  uint32 shell_interceptions = 14;
+  uint32 team_kills          = 15;
+  repeated Unit units        = 16;  // Vehicles available to the player in this battle.
+  optional Elo  elo          = 17;  // Rating before and after. Squadron battles only, absent when not computed.
+}
+
+message Elo {
+  uint32 start = 1;  // Rating before the battle.
+  uint32 end   = 2;  // Rating after the battle.
+}
+
+message ClanElo {
+  string tag   = 1;  // Full squadron tag, brackets included.
+  sint32 start = 2;  // Squadron points before the battle. Signed: a total can be negative.
+  sint32 end   = 3;  // Squadron points after the battle. Signed: a total can be negative.
+}
+
+// One vehicle in a player's lineup.
+message Unit {
+  bool   used         = 1;  // True when the player spawned in this vehicle.
+  string unit_id      = 2;  // Internal in-game id, e.g. us_m1_abrams.
+  string unit_name    = 3;  // Display name; falls back to unit_id when untranslated.
+  string unit_type    = 4;  // tank | aircraft | helicopter | ship | ...
+  string unit_class   = 5;  // Vehicle class, e.g. medium tank, fighter.
+  string unit_country = 6;  // Country of origin, e.g. usa.
+  optional bool free  = 7;  // Vehicle granted on top of the lineup. Random battles only.
+}
+
+// Trajectory of one spawned vehicle, on three independent time axes: t for the
+// hull, view_t for the camera, turret_t for gun aiming.
+message Entity {
+  string uid     = 1;  // Owner player uid, "0" when none.
+  string unit_id = 2;  // Internal in-game id; ground vehicles carry the tankModels/ prefix.
+
+  repeated sint32 t          = 3;  // Time deltas of the hull channels, ms.
+  repeated sint32 x          = 4;  // X deltas.
+  repeated sint32 y          = 5;  // Y deltas. Y is altitude.
+  repeated sint32 z          = 6;  // Z deltas.
+  repeated sint32 hull_yaw   = 7;  // Hull yaw deltas, on the t axis.
+  repeated sint32 hull_pitch = 8;  // Hull pitch deltas, on the t axis.
+  repeated sint32 hull_roll  = 9;  // Hull roll deltas, on the t axis.
+
+  repeated sint32 view_t    = 10;  // Time deltas of the camera channels, ms. Empty when the replay has no camera data.
+  repeated sint32 cam_yaw   = 11;  // Camera yaw deltas, on the view_t axis. Within +-pi.
+  repeated sint32 cam_pitch = 12;  // Camera pitch deltas, on the view_t axis.
+  repeated sint32 cam_roll  = 13;  // Camera roll deltas, on the view_t axis. Within +-pi/2.
+  repeated sint32 aim_yaw   = 14;  // Yaw of the aiming reticle, on the view_t axis. Where the guns are told to converge, not where they are.
+  repeated sint32 aim_pitch = 15;  // Pitch of the aiming reticle, on the view_t axis.
+
+  repeated sint32 turret_t  = 16;  // Time deltas of the gun aiming channels, ms. Shared by every gun of this vehicle.
+  repeated Weapon weapons   = 17;  // Aiming angles, one entry per gun. Ground vehicles only.
+}
+
+// Aiming angles of one gun, on the turret_t axis of the owning entity. Angles are
+// world frame, in the same convention as hull_*: turret rotation relative to the
+// hull is turret_yaw - hull_yaw, gun elevation relative to the turret is
+// gun_pitch - turret_pitch.
+message Weapon {
+  // Model bone the barrel fires from, e.g. bone_gun_barrel | bone_mg_aa_v_01.
+  // Unique within a vehicle: two records with the same gun_id differ only by this.
+  string mount                 = 1;
+  string gun_id                = 2;  // Internal in-game id of the barrel or launcher.
+  string gun_name              = 3;  // Display name; falls back to gun_id when untranslated.
+  repeated sint32 turret_yaw   = 4;  // Turret heading deltas.
+  repeated sint32 turret_pitch = 5;  // Turret pitch deltas.
+  repeated sint32 gun_pitch    = 6;  // Gun elevation deltas.
+}
+
+// Flight path of one bomb or rocket.
+message Projectile {
+  string uid         = 1;  // Owner player uid, "0" when unknown.
+  string unit_id     = 2;  // Internal id of the vehicle it was fired from.
+  string type        = 3;  // bomb | rocket | ...
+  string weapon_id   = 4;  // Internal in-game id of the munition, e.g. fr_ss_11.
+  string weapon_name = 5;  // Short display name, e.g. AIM-9B; falls back to weapon_id.
+
+  repeated sint32 t     = 6;   // Time deltas, ms.
+  repeated sint32 x     = 7;
+  repeated sint32 y     = 8;   // Y is altitude.
+  repeated sint32 z     = 9;
+  repeated sint32 yaw   = 10;  // Projectile yaw deltas, on the t axis.
+  repeated sint32 pitch = 11;
+  repeated sint32 roll  = 12;
+}
+
+message Kill {
+  string          offender_uid     = 1;  // Killer uid, "0" when crashed.
+  string          offender_unit_id = 2;  // Killer vehicle id, empty when crashed.
+  repeated sint32 offender_pos     = 3;  // Killer position (x, y, z), metres * pos_quant. Absolute, not delta encoded.
+  // Munition id: a shell id for guns (152mm_xm578e1), a missile id for missiles
+  // (fr_ss_11). Two special values: artillery for an artillery strike, and an
+  // empty string for a ram.
+  string          used_weapon_id   = 4;
+  string          offended_uid     = 5;  // Victim uid.
+  string          offended_unit_id = 6;  // Victim vehicle id.
+  repeated sint32 offended_pos     = 7;  // Victim position (x, y, z), metres * pos_quant.
+  bool            crashed          = 8;  // True when the victim died with no opponent involved.
+  uint32          time             = 9;  // Battle time, ms.
+}
+
+message Damage {
+  string offender_uid     = 1;  // Damage dealer uid, "0" when unknown.
+  string offender_unit_id = 2;  // Damage dealer vehicle id. Often empty even when offender_uid is known.
+  string offended_uid     = 3;  // Damaged player uid.
+  string offended_unit_id = 4;  // Damaged vehicle id.
+  string type             = 5;  // severe | critical | ...
+  optional bool afire     = 6;  // Target set on fire. Critical damage only.
+  uint32 time             = 7;  // Battle time, ms.
+}
+
+message Award {
+  string uid   = 1;  // Awarded player uid.
+  string award = 2;  // Award identifier, e.g. first_blood.
+  uint32 time  = 3;  // Battle time, ms.
+}
+
+// A munition shot down in flight. The victim is the munition, not a vehicle.
+message Interception {
+  string offender_uid          = 1;  // Interceptor uid, "0" when unknown.
+  string offender_unit_id      = 2;  // Interceptor vehicle id.
+  string offended_uid          = 3;  // Uid of the player whose munition was destroyed.
+  string used_weapon_id        = 4;  // Munition used to intercept.
+  string intercepted_weapon_id = 5;  // Munition that was destroyed.
+  uint32 time                  = 6;  // Battle time, ms.
+}
+
+message ChatLine {
+  string uid     = 1;  // Sender uid, "0" when unknown.
+  string type    = 2;  // all | team | ...
+  string message = 3;  // Message text.
+  uint32 time    = 4;  // Battle time, ms.
+}
+
+message Zone {
+  string label          = 1;  // Zone letter: A, B, C...
+  uint32 icon_idx       = 2;  // Raw icon index the label is derived from.
+  repeated float center = 3;  // Zone center (x, y, z), metres, not quantized.
+  float  radius         = 4;  // Zone radius, metres.
+  repeated sint32 cap_t = 5;  // Time deltas of the capture history, ms.
+  repeated sint32 cap_v = 6;  // Capture value deltas: -100 team 1, 0 neutral, 100 team 2.
+}
+
+message Tickets {
+  repeated sint32 team1_t = 1;  // Time deltas of the team 1 ticket history, ms.
+  repeated sint32 team1_v = 2;  // Ticket value deltas for team 1.
+  repeated sint32 team2_t = 3;  // Time deltas of the team 2 ticket history, ms.
+  repeated sint32 team2_v = 4;  // Ticket value deltas for team 2.
+}

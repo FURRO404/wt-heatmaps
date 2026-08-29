@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"main/lib/lux/luxproto/luxprotogen"
 	"net"
 	"strconv"
 	"strings"
@@ -13,8 +15,10 @@ import (
 
 	"github.com/DataDog/zstd"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/shamaton/msgpack/v3"
 	"golang.org/x/net/websocket"
+	"google.golang.org/protobuf/proto"
 )
 
 type FetchPreferences struct {
@@ -42,7 +46,7 @@ func peekAbbrevStrArr(l string, a []string) string {
 	}
 }
 
-func FetchFromLux(log zerolog.Logger, exitChan <-chan struct{}, carvesChan chan<- *LuxCarve, preferences <-chan FetchPreferences, token string) error {
+func FetchFromLux(log zerolog.Logger, exitChan <-chan struct{}, carvesChan chan<- *luxprotogen.Replay, preferences <-chan FetchPreferences, token string) error {
 	ws, err := dialLux(log, token)
 	if err != nil {
 		return fmt.Errorf("dial lux: %w", err)
@@ -109,25 +113,51 @@ func FetchFromLux(log zerolog.Logger, exitChan <-chan struct{}, carvesChan chan<
 			case websocket.TextFrame:
 				log.Info().Str("data", string(msg)).Msg("text frame")
 			case websocket.BinaryFrame:
-				// log.Info().Int("data", len(msg)).Msg("binary frame")
-				// timings := time.Now()
+				log.Info().Int("data", len(msg)).Msg("binary frame")
+				timings := time.Now()
+
 				msgDecompressed, errRead = zstd.Decompress(msgDecompressed, msg)
-				// timingsDecomp := time.Since(timings)
+				timingsDecomp := time.Since(timings)
+
 				if errRead != nil {
 					wsClose()
 					return
 				}
-				var carve LuxCarve
-				// timings = time.Now()
-				errRead = msgpack.Unmarshal(msgDecompressed, &carve)
-				// timingsParse := time.Since(timings)
-				// log.Info().Str("timingsDecomp", timingsDecomp.Round(time.Nanosecond).String()).
-				// 	Str("timingsParse", timingsParse.Round(time.Nanosecond).String()).
-				// 	Int("len", len(msgDecompressed)).Msg("got battle report")
+
+				var m luxprotogen.Envelope
+
+				timings = time.Now()
+
+				errRead = proto.Unmarshal(msgDecompressed, &m)
 				if errRead != nil {
+					log.Err(err).Msg("reading envelope")
 					wsClose()
 					return
 				}
+				if m.Kind != "full" {
+					log.Error().Msg("not full replay kind")
+					wsClose()
+					return
+				}
+				if m.SchemaVersion != 1 {
+					log.Error().Msg("proto schema wrong version")
+					wsClose()
+					return
+				}
+
+				var carve luxprotogen.Replay
+				errRead = proto.Unmarshal(m.Body, &carve)
+				if errRead != nil {
+					log.Err(err).Msg("reading envelope body")
+					wsClose()
+					return
+				}
+
+				timingsParse := time.Since(timings)
+				log.Info().Str("timingsDecomp", timingsDecomp.Round(time.Nanosecond).String()).
+					Str("timingsParse", timingsParse.Round(time.Nanosecond).String()).
+					Int("len", len(msgDecompressed)).Msg("got battle report")
+
 				select {
 				case carvesChan <- &carve:
 				default:

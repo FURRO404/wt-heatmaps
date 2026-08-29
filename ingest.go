@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"main/lib/killstorage"
 	"main/lib/lux"
+	"main/lib/lux/luxproto/luxprotogen"
 	"main/lib/ratetrack"
 	"os"
 	"slices"
@@ -23,12 +24,13 @@ var (
 func ingestRoutine(exitChan <-chan struct{}) {
 	luxToken, haveLuxToken := cfg.GetString("lux", "token")
 	if !haveLuxToken {
+		log.Info().Msg("no lux.token so not ingesting")
 		return
 	}
 
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
-	carvesChan := make(chan *lux.LuxCarve, 16)
+	carvesChan := make(chan *luxprotogen.Replay, 16)
 	preferencesChan := make(chan lux.FetchPreferences, 16)
 	reconnectExitChan := make(chan struct{})
 	updatePreferencesExitChan := make(chan struct{})
