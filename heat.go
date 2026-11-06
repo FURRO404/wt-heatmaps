@@ -11,13 +11,47 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"os"
-	"slices"
 	"time"
 
 	"github.com/fogleman/gg"
 	"github.com/rs/zerolog/log"
 )
+
+// Auto-exposure walks out from the peak of a pixel histogram. It stops where a
+// rolling average over autoExposureWindow values falls by less than
+// autoExposureSlope (natural log) for each step, because the tail of peak
+// pixels starts there. On a map with a lot of data, this gives limits near 8,
+// which is the same look as intensity 32.
+const (
+	autoExposureWindow = 3
+	autoExposureSlope  = 0.4
+)
+
+// histogramTailStart finds the peak of h from the index from in the direction
+// dir, then walks from the peak in the direction dir. It returns the index
+// where the tail of h starts.
+func histogramTailStart(h []int, from, dir int) int {
+	avg := func(i int) float64 {
+		sum := 0
+		for j := i; j >= 0 && j < len(h) && j != i+dir*autoExposureWindow; j += dir {
+			sum += h[j]
+		}
+		return float64(sum) / autoExposureWindow
+	}
+	i := from
+	for j := from; j >= 0 && j < len(h); j += dir {
+		if h[j] > h[i] {
+			i = j
+		}
+	}
+	for ; i+dir >= 0 && i+dir < len(h); i += dir {
+		a, b := avg(i), avg(i+dir)
+		if b == 0 || math.Log(b/a) > -autoExposureSlope {
+			break
+		}
+	}
+	return i
+}
 
 func serveHeat(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -91,11 +125,12 @@ func renderTally(levelOffsets levelcoords.LevelCoords, tally iter.Seq[*killstora
 	outputH := int(areaH)
 	out := image.NewRGBA(image.Rect(0, 0, outputW, outputH))
 
-	scoreIntensity := int64(urlValueIntOr(q, "scoreIntensity", 0))
-	countIntensity := int64(urlValueIntOr(q, "countIntensity", 0))
+	scoreIntensity := float64(urlValueIntOr(q, "scoreIntensity", 0))
+	countIntensity := float64(urlValueIntOr(q, "countIntensity", 0))
 
 	// log.Info().Msgf("scale %f %f area %f %f offsets %#v", scaleW, scaleH, areaW, areaH, levelOffsets)
 	totalN := uint64(0)
+	maxCount, minDelta, maxDelta := int64(0), int64(0), int64(0)
 	blockKills := make([]int64, outputH*outputW)
 	blockDeaths := make([]int64, outputH*outputW)
 
@@ -105,58 +140,55 @@ func renderTally(levelOffsets levelcoords.LevelCoords, tally iter.Seq[*killstora
 		if tx < 0 || tx >= float64(outputW) || tz < 0 || tz >= float64(outputH) {
 			continue
 		}
-		blockKills[int(tx+tz*float64(outputW))] = int64(v.Kills)
-		blockDeaths[int(tx+tz*float64(outputW))] = int64(v.Deaths)
+		vk, vd := int64(v.Kills), int64(v.Deaths)
+		blockKills[int(tx+tz*float64(outputW))] = vk
+		blockDeaths[int(tx+tz*float64(outputW))] = vd
 		totalN += uint64(v.Kills + v.Deaths)
+		maxCount = max(maxCount, vk+vd)
+		minDelta = min(minDelta, vk-vd)
+		maxDelta = max(maxDelta, vk-vd)
 	}
 
-	if scoreIntensity == 0 || countIntensity == 0 {
-		return nil
-		hr := []float64{}
-		hd := []float64{}
-		hc := []float64{}
-		for v := range tally {
-			vd := float64(v.Deaths)
-			vk := float64(v.Kills)
-			if vd == 0 {
-				vd = 1
-			}
-			hr = append(hr, vk/vd)
-			hd = append(hd, vk-vd)
-			hc = append(hc, vk+vd)
-		}
-		slices.Sort(hr)
-		slices.Sort(hd)
-		slices.Sort(hc)
-		hr = slices.Compact(hr)
-		hd = slices.Compact(hd)
-		hc = slices.Compact(hc)
-		log.Info().Float64("last", hr[len(hr)-1]).Float64("first", hr[0]).Int("len", len(hr)).Msg("hr")
-		log.Info().Float64("last", hc[len(hc)-1]).Float64("first", hc[0]).Int("len", len(hc)).Msg("hc")
-		log.Info().Float64("last", hd[len(hd)-1]).Float64("first", hd[0]).Int("len", len(hd)).Msg("hd")
-		d := make([]float64, len(hd)-1)
-		for i := range d {
-			d[i] = hd[i+1] - hd[i]
-		}
-		saveDat := func(d []float64, fn string) {
-			buf := &bytes.Buffer{}
-			for i, v := range d {
-				fmt.Fprintf(buf, "%v\t%v\n", i, v)
-			}
-			must(os.WriteFile(fn, buf.Bytes(), 0644))
-		}
-		saveDat(d, "out.dat")
-		return nil
-	} else {
+	// Auto-exposure: a pixel at or past a limit gets the full color, so the few
+	// peak pixels in the tails of the histograms do not make the rest dark.
+	if (scoreIntensity == 0 || countIntensity == 0) && maxCount > 0 {
+		countHist := make([]int, maxCount+1)
+		deltaHist := make([]int, maxDelta-minDelta+1)
 		for i, vk := range blockKills {
-			o := i * 4
 			vd := blockDeaths[i]
-			vdelta := vk - vd
-			out.Pix[o+0] = uint8(max(min(vdelta*scoreIntensity, 255), 0))
-			out.Pix[o+1] = uint8(max(min(vdelta*vdelta, 255), 0) / 2)
-			out.Pix[o+2] = uint8(max(min(-vdelta*scoreIntensity, 255), 0))
-			out.Pix[o+3] = uint8(min((vk+vd)*countIntensity, 255))
+			if vk+vd == 0 {
+				continue
+			}
+			countHist[vk+vd]++
+			deltaHist[vk-vd-minDelta]++
 		}
+		countUpper := int64(histogramTailStart(countHist, 1, 1))
+		deltaLower, deltaUpper := int64(0), int64(0)
+		if minDelta < 0 {
+			deltaLower = int64(histogramTailStart(deltaHist, int(-1-minDelta), -1)) + minDelta
+		}
+		if maxDelta > 0 {
+			deltaUpper = int64(histogramTailStart(deltaHist, int(1-minDelta), 1)) + minDelta
+		}
+		// One scale for red and blue, so the same |delta| gives the same color.
+		if scoreIntensity == 0 {
+			scoreIntensity = 255 / float64(max(-deltaLower, deltaUpper, 1))
+		}
+		if countIntensity == 0 {
+			countIntensity = 255 / float64(max(countUpper, 1))
+		}
+		log.Info().Int64("deltaLower", deltaLower).Int64("deltaUpper", deltaUpper).Int64("countUpper", countUpper).
+			Float64("scoreIntensity", scoreIntensity).Float64("countIntensity", countIntensity).Msg("heat auto-exposure")
+	}
+
+	for i, vk := range blockKills {
+		o := i * 4
+		vd := blockDeaths[i]
+		vdelta := vk - vd
+		out.Pix[o+0] = uint8(max(min(float64(vdelta)*scoreIntensity, 255), 0))
+		out.Pix[o+1] = uint8(max(min(vdelta*vdelta, 255), 0) / 2)
+		out.Pix[o+2] = uint8(max(min(float64(-vdelta)*scoreIntensity, 255), 0))
+		out.Pix[o+3] = uint8(max(min(float64(vk+vd)*countIntensity, 255), 0))
 	}
 
 	ret := ggStrings(gg.NewContextForImage(out), 20, 20, color.RGBA{R: 255, G: 255, B: 255, A: 128}, color.RGBA{R: 0, G: 0, B: 0, A: 255},
